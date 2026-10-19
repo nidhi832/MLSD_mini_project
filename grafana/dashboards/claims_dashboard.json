@@ -1,0 +1,127 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Claim Submission Rate (Throughput)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(claim_submissions_total[1m]))",
+          "legendFormat": "RPS"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "title": "p95 Run Latency (SLO <= 5.0s)",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(claim_run_latency_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p95 Latency"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "max": 10,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3.5 },
+              { "color": "red", "value": 5.0 }
+            ]
+          },
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "title": "Cumulative Cost (USD)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "llm_cost_usd_total",
+          "legendFormat": "Total Cost USD"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "title": "Cache Hit Ratio (D7)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "rate(cache_requests_total{result='hit'}[1m]) / (rate(cache_requests_total[1m]) + 0.0001)",
+          "legendFormat": "Hit Ratio"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "title": "Latency Distribution (p50 vs p95)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(claim_run_latency_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p50 Latency"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(claim_run_latency_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p95 Latency (SLO)"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "title": "Agent Activity & Tool Invocations (A6)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(agent_steps_total[1m])) by (agent_name)",
+          "legendFormat": "Agent Steps - {{agent_name}}"
+        },
+        {
+          "expr": "sum(rate(tool_calls_total[1m])) by (tool_name)",
+          "legendFormat": "Tool Calls - {{tool_name}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["mlops", "agentops", "aviation"],
+  "time": { "from": "now-15m", "to": "now" },
+  "title": "Air Passenger Claim Triage - AgentOps Dashboard",
+  "uid": "claim-triage-dash"
+}

@@ -1,0 +1,44 @@
+INDIGO PASSENGER CHARTER AND CONDITIONS OF CARRIAGE (CUSTOMER COMMITMENT)
+DOCUMENT REF: 6E-COC-2023-V2
+LAST UPDATED: 01 MARCH 2023
+
+1. CUSTOMER COMMITMENT OVERVIEW
+InterGlobe Aviation Limited ("IndiGo") is committed to delivering courteous, on-time, and hassle-free travel. This Passenger Charter outlines the rights of passengers traveling on IndiGo flights, compliant with the DGCA Civil Aviation Requirements (CAR).
+
+2. BOOKING AND CONTACT INFORMATION
+2.1 Accurate Contact Information Requirement:
+Passengers are required to provide an active mobile telephone number and valid email address at the time of booking. IndiGo transmits operational flight status updates, schedule changes, and disruption notifications via SMS, WhatsApp, and email.
+2.2 Non-Provision of Contact Details:
+If the passenger or booking agent fails to furnish contact details or provides incorrect details, IndiGo shall be relieved of liability for failure to provide prior notice of flight cancellation or schedule change, in line with DGCA CAR Clause 3.3.4(b).
+
+3. SCHEDULE CHANGES AND FLIGHT CANCELLATIONS
+3.1 Plan B Option:
+In the event of flight cancellation or schedule adjustment exceeding 2 hours:
+(a) The passenger may rebook on another IndiGo flight within +/- 7 days at no additional cost; OR
+(b) The passenger may cancel the booking and receive a 100% refund without cancellation penalties.
+3.2 Compensation Eligibility:
+(a) Where cancellation notice is provided less than 24 hours prior to scheduled departure, and the passenger does NOT accept an alternate flight, compensation will be disbursed pursuant to DGCA CAR 3.3.2.
+(b) Where the passenger opts for and takes an alternate flight offered by IndiGo, monetary compensation is waived, but IndiGo provides airport food and beverage vouchers.
+3.3 Extraordinary Circumstances Exemption:
+IndiGo shall not be liable for compensation when cancellations are precipitated by meteorological conditions, dense fog, ATC congestion, NOTAM closures, or safety threats.
+
+4. BAGGAGE DISRUPTIONS
+4.1 Delayed or Damaged Baggage:
+Claims for damaged baggage must be registered within 7 days of receipt. Claims for delayed baggage must be lodged within 21 days from the date baggage ought to have arrived.
+4.2 Liability Limit:
+Baggage liability is governed by the Carriage by Air Act, 1972, capped at statutory SDR equivalents unless a higher declared value was purchased at check-in.
+
+5. CLAIMS PROCESS AND DOCUMENTATION
+5.1 Time Limit for Filing:
+Passengers must submit disruption compensation claims within 30 calendar days from the date of flight disruption via the IndiGo Customer Relations portal.
+5.2 Mandatory Documentation:
+All claims must accompany:
+(a) PNR and e-ticket receipt
+(b) Boarding passes (original and alternate flight if applicable)
+(c) Expense receipts for refreshments/meals incurred during disruption if vouchers were not redeemed
+(d) Government ID copy matching the ticketed passenger name.
+
+6. ESCALATIONS AND DISPUTE RESOLUTION
+If the customer relations response is deemed unsatisfactory, passengers may escalate to:
+(a) IndiGo Customer Grievance Officer: grievances@goindigo.in
+(b) Ministry of Civil Aviation AirSewa Portal: https://airsewa.gov.in

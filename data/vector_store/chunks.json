@@ -1,0 +1,766 @@
+[
+  {
+    "chunk_id": "chunk-4381171b0db55116",
+    "clause_id": "CAR-GEN",
+    "section_title": "CIVIL AVIATION REQUIREMENTS",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "CIVIL AVIATION REQUIREMENTS\nSECTION 3 \u2013 AIR TRANSPORT\nSERIES \u2018M\u2019 PART IV\nISSUE I, DATED 6TH AUGUST 2010\nEFFECTIVE: 15TH FEBRUARY 2023 (REVISION 4)\n\nSUBJECT: FACILITIES TO BE PROVIDED TO PASSENGERS BY AIRLINES DUE TO DENIED BOARDING, CANCELLATION OF FLIGHTS AND DELAYS IN FLIGHTS.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-81ed7e069b626c15",
+    "clause_id": "CAR-GEN",
+    "section_title": "1. INTRODUCTION",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "1. INTRODUCTION",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-623cc1a21df78738",
+    "clause_id": "CAR-1.1",
+    "section_title": "1.1 The Government of India has recognized the need to protect the rights of air passengers and ensure appropriate facilities and compensation during instances of denied boarding, flight cancellations, and delays.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "1.1 The Government of India has recognized the need to protect the rights of air passengers and ensure appropriate facilities and compensation during instances of denied boarding, flight cancellations, and delays.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-2937f2bbcf2b53dd",
+    "clause_id": "CAR-1.2",
+    "section_title": "1.2 The regulations apply to all scheduled domestic and international air transport services operating to, from, and within India.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "1.2 The regulations apply to all scheduled domestic and international air transport services operating to, from, and within India.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b2b6fc5a0ba49531",
+    "clause_id": "CAR-GEN",
+    "section_title": "2. DEFINITIONS",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2. DEFINITIONS",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-16e6db9e50131cb8",
+    "clause_id": "CAR-2.1",
+    "section_title": "2.1 \"Block Time\" means the total time elapsed between the aircraft first moving from the parking position at departure airport until it comes to a complete rest at the allocated parking stand at the arrival airport.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2.1 \"Block Time\" means the total time elapsed between the aircraft first moving from the parking position at departure airport until it comes to a complete rest at the allocated parking stand at the arrival airport.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-2c5247ffd224d4b8",
+    "clause_id": "CAR-2.2",
+    "section_title": "2.2 \"Cancellation\" means non-operation of a flight which was previously planned and on which at least one place was reserved.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2.2 \"Cancellation\" means non-operation of a flight which was previously planned and on which at least one place was reserved.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-e5ac1f95cadaf8fa",
+    "clause_id": "CAR-2.3",
+    "section_title": "2.3 \"Denied Boarding\" means a refusal to accommodate passengers on a flight, although they have presented themselves for boarding under the conditions laid down, except where there are reasonable grounds for refusal such as reasons of health, safety, security, or inadequate travel documentation.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2.3 \"Denied Boarding\" means a refusal to accommodate passengers on a flight, although they have presented themselves for boarding under the conditions laid down, except where there are reasonable grounds for refusal such as reasons of health, safety, security, or inadequate travel documentation.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b903a01fbe1c0c1b",
+    "clause_id": "CAR-2.4",
+    "section_title": "2.4 \"Delay\" means the difference in time between the scheduled time of departure/arrival and actual time of departure/arrival of the flight.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2.4 \"Delay\" means the difference in time between the scheduled time of departure/arrival and actual time of departure/arrival of the flight.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "delay",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-ea702d360eb2132e",
+    "clause_id": "CAR-2.5",
+    "section_title": "2.5 \"Extraordinary Circumstances\" means circumstances which could not have been avoided even if all reasonable measures had been taken by the airline, including weather conditions, air traffic control restrictions, security risks, political instability, strikes, and natural disasters.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "2.5 \"Extraordinary Circumstances\" means circumstances which could not have been avoided even if all reasonable measures had been taken by the airline, including weather conditions, air traffic control restrictions, security risks, political instability, strikes, and natural disasters.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": true,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-99b85ceef6d16f69",
+    "clause_id": "CAR-GEN",
+    "section_title": "3. REQUIREMENTS AND PROVISIONS",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3. REQUIREMENTS AND PROVISIONS",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-7deb26cd57870b0f",
+    "clause_id": "CAR-3.1",
+    "section_title": "3.1 GENERAL",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.1 GENERAL",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-05a584822680f854",
+    "clause_id": "CAR-3.1.1",
+    "section_title": "3.1.1 Operating airlines shall ensure that passengers are treated with dignity and courtesy at all times.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.1.1 Operating airlines shall ensure that passengers are treated with dignity and courtesy at all times.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-232aef070c48201b",
+    "clause_id": "CAR-3.1.2",
+    "section_title": "3.1.2 Airlines shall display their passenger charter prominently on their official website and at airport customer service counters.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.1.2 Airlines shall display their passenger charter prominently on their official website and at airport customer service counters.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-536c16bd35012cc3",
+    "clause_id": "CAR-3.2",
+    "section_title": "3.2 DENIED BOARDING",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.2 DENIED BOARDING",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-dcf3dee91c4c7326",
+    "clause_id": "CAR-3.2.1",
+    "section_title": "3.2.1 When an airline anticipates overbooking, it shall first call for volunteers to surrender their reservations in exchange for benefits agreed upon between passenger and airline.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.2.1 When an airline anticipates overbooking, it shall first call for volunteers to surrender their reservations in exchange for benefits agreed upon between passenger and airline.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b7bcbf39b617f5db",
+    "clause_id": "CAR-3.2.2",
+    "section_title": "3.2.2 If an involuntary denied boarding occurs despite passenger holding confirmed ticket and reporting on time:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.2.2 If an involuntary denied boarding occurs despite passenger holding confirmed ticket and reporting on time:\n(a) If an alternate flight is arranged within 1 hour of scheduled departure: No monetary compensation, but facilitation provided.\n(b) If an alternate flight is arranged within 24 hours of original scheduled departure: An amount equal to 200% of booked one-way basic fare plus airline fuel charge, up to a maximum of INR 10,000.\n(c) If an alternate flight is arranged beyond 24 hours or if passenger chooses not to travel: An amount equal to 400% of booked one-way basic fare plus airline fuel charge, up to a maximum of INR 20,000, plus full refund of ticket.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": true,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-bae8dca1e250ef62",
+    "clause_id": "CAR-3.3",
+    "section_title": "3.3 CANCELLATION OF FLIGHTS",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.3 CANCELLATION OF FLIGHTS",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-311a3cb22ac6e67c",
+    "clause_id": "CAR-3.3.1",
+    "section_title": "3.3.1 Informing Passengers:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.3.1 Informing Passengers:\n(a) If informed of cancellation at least 2 weeks before scheduled departure: Airline shall offer an alternate flight or full refund of ticket. No compensation payable.\n(b) If informed less than 2 weeks and up to 24 hours before departure: Airline shall offer alternate flight or full refund of ticket.\n(c) If informed less than 24 hours or after reporting to the airport: Provisions of 3.3.2 shall apply.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-63cfe52748e49b4c",
+    "clause_id": "CAR-3.3.2",
+    "section_title": "3.3.2 Cancellation Compensation and Alternate Flight Provision:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.3.2 Cancellation Compensation and Alternate Flight Provision:\nIn case of flight cancellation where passenger is informed less than 24 hours before departure or after reporting to airport:\nThe airline shall either:\n(1) Provide an alternate flight acceptable to the passenger, OR\n(2) Provide compensation along with full refund of the ticket.\nCompensation scale when applicable:\n- Clause 3.3.2.a: INR 5,000 or booked one-way basic fare plus airline fuel charge (whichever is less) for flights having a block time up to 1 hour.\n- Clause 3.3.2.b: INR 7,500 or booked one-way basic fare plus airline fuel charge (whichever is less) for flights having a block time of more than 1 hour and up to 2 hours.\n- Clause 3.3.2.c: INR 10,000 or booked one-way basic fare plus airline fuel charge (whichever is less) for flights having a block time of more than 2 hours.\nCondition on alternate flight acceptance:\nWhere the passenger accepts an alternate flight provided by the airline, the passenger shall NOT be entitled to financial compensation for cancellation under Clause 3.3.2. However, the airline remains strictly obligated to provide free of charge meals, refreshments, and facilities under Clause 3.7 and 3.8 during the waiting period.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "denied_boarding",
+      "has_compensation_scale": true,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": false,
+      "mentions_facilities": true
+    }
+  },
+  {
+    "chunk_id": "chunk-cf6909b868ff0f94",
+    "clause_id": "CAR-3.3.3",
+    "section_title": "3.3.3 Connecting Flights:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.3.3 Connecting Flights:\nPassengers missing connecting flights booked on a single PNR due to cancellation of the first sector shall be provided either an alternate flight to destination or full refund of all unutilized sectors, plus compensation as per 3.3.2 based on final arrival delay.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-bc6d6cf5df7c17a6",
+    "clause_id": "CAR-3.3.4",
+    "section_title": "3.3.4 Exemptions from Cancellation Compensation:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.3.4 Exemptions from Cancellation Compensation:\nThe airline shall NOT be liable to pay compensation if:\n(a) The cancellation is caused by extraordinary circumstances beyond airline control (weather, ATC instructions, bird strike, runway closure, political turmoil, or government orders).\n(b) The passenger failed to provide correct contact details (valid mobile telephone number or email address) at the time of booking, and the airline made documented attempts to contact them.\n(c) The passenger fails to accept an alternate flight departing within 2 hours of original scheduled departure.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": true,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b1018ca88e3b2ecb",
+    "clause_id": "CAR-3.4",
+    "section_title": "3.4 FLIGHT DELAYS",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.4 FLIGHT DELAYS",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "delay",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-7a280c573a619a9b",
+    "clause_id": "CAR-3.4.1",
+    "section_title": "3.4.1 Airlines shall provide free meals and refreshments to passengers in proportion to waiting time:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.4.1 Airlines shall provide free meals and refreshments to passengers in proportion to waiting time:\n(a) For flights with block time up to 2.5 hours: Delay exceeding 2 hours.\n(b) For flights with block time between 2.5 hours and 5 hours: Delay exceeding 3 hours.\n(c) For flights with block time exceeding 5 hours: Delay exceeding 4 hours.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "delay",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": true
+    }
+  },
+  {
+    "chunk_id": "chunk-d3c45a1ad1e9aeda",
+    "clause_id": "CAR-3.4.2",
+    "section_title": "3.4.2 Hotel Accommodation and Ground Transfers:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.4.2 Hotel Accommodation and Ground Transfers:\nAirlines shall provide free hotel accommodation and ground transport when:\n(a) Flight departure delay is more than 24 hours beyond scheduled time.\n(b) A night delay (departure between 20:00 hours and 06:00 hours) exceeds 6 hours.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "delay",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": true
+    }
+  },
+  {
+    "chunk_id": "chunk-3f7649f8ba6a8d61",
+    "clause_id": "CAR-3.4.3",
+    "section_title": "3.4.3 Delay Exceeding 6 Hours / Refund:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.4.3 Delay Exceeding 6 Hours / Refund:\nIf a flight delay is expected to exceed 6 hours, the airline shall inform passengers at least 6 hours before scheduled departure and offer either an alternate flight or full refund of ticket.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "delay",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": true,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-7313040603a1b2aa",
+    "clause_id": "CAR-3.5",
+    "section_title": "3.5 DOWNGRADING",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.5 DOWNGRADING",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "downgrading",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-ced1f4721da9dc46",
+    "clause_id": "CAR-3.5.1",
+    "section_title": "3.5.1 Involuntary Downgrading:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.5.1 Involuntary Downgrading:\nIf a passenger is involuntarily placed in a class lower than that for which ticket was purchased:\n(a) Domestic flights: 75% of the ticket price including taxes and fees for the degraded sector.\n(b) International flights: 30% to 75% of ticket price depending on flight distance.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "downgrading",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b7a4791149b0bf7b",
+    "clause_id": "CAR-3.6",
+    "section_title": "3.6 DISPUTE RESOLUTION AND ESCALATION",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.6 DISPUTE RESOLUTION AND ESCALATION",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-9f693e7912a4985c",
+    "clause_id": "CAR-3.6.1",
+    "section_title": "3.6.1 Grievance Redressal:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.6.1 Grievance Redressal:\nPassengers aggrieved by airline non-compliance may file a formal complaint with the airline's appellate authority or escalate through the Ministry of Civil Aviation AirSewa portal (airsewa.gov.in) or DGCA Passenger Grievance Cell.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "general",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-0354f7e3aee41f79",
+    "clause_id": "CAR-3.6.2",
+    "section_title": "3.6.2 Burden of Proof:",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.6.2 Burden of Proof:\nThe burden of proving that passengers were informed of cancellation or that extraordinary circumstances occurred rests solely with the operating airline.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "cancellation",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": true,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-fd81e8c4481c6746",
+    "clause_id": "CAR-3.7",
+    "section_title": "3.7 FACILITIES PROVISION (MEALS AND REFRESHMENTS)",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.7 FACILITIES PROVISION (MEALS AND REFRESHMENTS)",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "facilities",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": true
+    }
+  },
+  {
+    "chunk_id": "chunk-97d98d65c94ad1a4",
+    "clause_id": "CAR-3.7.1",
+    "section_title": "3.7.1 Meals and refreshments must be commensurate with waiting time and provided hygienically at the airport terminal.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.7.1 Meals and refreshments must be commensurate with waiting time and provided hygienically at the airport terminal.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "facilities",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": true
+    }
+  },
+  {
+    "chunk_id": "chunk-d87edec9a4048100",
+    "clause_id": "CAR-3.7.2",
+    "section_title": "3.7.2 Passengers must be kept informed of revised flight timings at minimum 30-minute intervals.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.7.2 Passengers must be kept informed of revised flight timings at minimum 30-minute intervals.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "facilities",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-4ed8bdbf0dabebd3",
+    "clause_id": "CAR-3.8",
+    "section_title": "3.8 SPECIAL CARE",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.8 SPECIAL CARE",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "facilities",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-684524171670fda4",
+    "clause_id": "CAR-3.8.1",
+    "section_title": "3.8.1 Priority assistance shall be extended to unaccompanied minors, elderly passengers, persons with disabilities, and expectant mothers during disruptions.",
+    "document_title": "DGCA CAR Section 3 Series M Part IV (Rev 4)",
+    "text": "3.8.1 Priority assistance shall be extended to unaccompanied minors, elderly passengers, persons with disabilities, and expectant mothers during disruptions.",
+    "metadata": {
+      "source": "DGCA_CAR_M_IV",
+      "category": "facilities",
+      "has_compensation_scale": false,
+      "mentions_alternate_flight": false,
+      "mentions_exemptions": false,
+      "mentions_facilities": false
+    }
+  },
+  {
+    "chunk_id": "chunk-7e82031e315b9506",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "INDIGO PASSENGER CHARTER AND CONDITIONS OF CARRIAGE (CUSTOMER COMMITMENT)",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "INDIGO PASSENGER CHARTER AND CONDITIONS OF CARRIAGE (CUSTOMER COMMITMENT)\nDOCUMENT REF: 6E-COC-2023-V2\nLAST UPDATED: 01 MARCH 2023",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-69ecbf83d918bf1b",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "1. CUSTOMER COMMITMENT OVERVIEW",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "1. CUSTOMER COMMITMENT OVERVIEW\nInterGlobe Aviation Limited (\"IndiGo\") is committed to delivering courteous, on-time, and hassle-free travel. This Passenger Charter outlines the rights of passengers traveling on IndiGo flights, compliant with the DGCA Civil Aviation Requirements (CAR).",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-3202826eea7431b0",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "2. BOOKING AND CONTACT INFORMATION",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "2. BOOKING AND CONTACT INFORMATION",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": true,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-8d2f7c40bb09c7d8",
+    "clause_id": "INDIGO-2.1",
+    "section_title": "A",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "2.1 Accurate Contact Information Requirement:\nPassengers are required to provide an active mobile telephone number and valid email address at the time of booking. IndiGo transmits operational flight status updates, schedule changes, and disruption notifications via SMS, WhatsApp, and email.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": true,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-770dc9a7df710f99",
+    "clause_id": "INDIGO-2.2",
+    "section_title": "N",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "2.2 Non-Provision of Contact Details:\nIf the passenger or booking agent fails to furnish contact details or provides incorrect details, IndiGo shall be relieved of liability for failure to provide prior notice of flight cancellation or schedule change, in line with DGCA CAR Clause 3.3.4(b).",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": true,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-fb0fc727a03cce05",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "3. SCHEDULE CHANGES AND FLIGHT CANCELLATIONS",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "3. SCHEDULE CHANGES AND FLIGHT CANCELLATIONS",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-aabd8b561f0bf368",
+    "clause_id": "INDIGO-3.1",
+    "section_title": "P",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "3.1 Plan B Option:\nIn the event of flight cancellation or schedule adjustment exceeding 2 hours:\n(a) The passenger may rebook on another IndiGo flight within +/- 7 days at no additional cost; OR\n(b) The passenger may cancel the booking and receive a 100% refund without cancellation penalties.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": true,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-37146d1b062b7594",
+    "clause_id": "INDIGO-3.2",
+    "section_title": "C",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "3.2 Compensation Eligibility:\n(a) Where cancellation notice is provided less than 24 hours prior to scheduled departure, and the passenger does NOT accept an alternate flight, compensation will be disbursed pursuant to DGCA CAR 3.3.2.\n(b) Where the passenger opts for and takes an alternate flight offered by IndiGo, monetary compensation is waived, but IndiGo provides airport food and beverage vouchers.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": true,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b1e142b8cb7547fb",
+    "clause_id": "INDIGO-3.3",
+    "section_title": "E",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "3.3 Extraordinary Circumstances Exemption:\nIndiGo shall not be liable for compensation when cancellations are precipitated by meteorological conditions, dense fog, ATC congestion, NOTAM closures, or safety threats.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-25423240479935be",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "4. BAGGAGE DISRUPTIONS",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "4. BAGGAGE DISRUPTIONS",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-5392cb36352009f3",
+    "clause_id": "INDIGO-4.1",
+    "section_title": "D",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "4.1 Delayed or Damaged Baggage:\nClaims for damaged baggage must be registered within 7 days of receipt. Claims for delayed baggage must be lodged within 21 days from the date baggage ought to have arrived.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-b127fbf00d2fce65",
+    "clause_id": "INDIGO-4.2",
+    "section_title": "L",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "4.2 Liability Limit:\nBaggage liability is governed by the Carriage by Air Act, 1972, capped at statutory SDR equivalents unless a higher declared value was purchased at check-in.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-40c5003647d6f839",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "5. CLAIMS PROCESS AND DOCUMENTATION",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "5. CLAIMS PROCESS AND DOCUMENTATION",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-8f975d7f04bfda19",
+    "clause_id": "INDIGO-5.1",
+    "section_title": "T",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "5.1 Time Limit for Filing:\nPassengers must submit disruption compensation claims within 30 calendar days from the date of flight disruption via the IndiGo Customer Relations portal.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": true
+    }
+  },
+  {
+    "chunk_id": "chunk-af642ffbaada1a74",
+    "clause_id": "INDIGO-5.2",
+    "section_title": "M",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "5.2 Mandatory Documentation:\nAll claims must accompany:\n(a) PNR and e-ticket receipt\n(b) Boarding passes (original and alternate flight if applicable)\n(c) Expense receipts for refreshments/meals incurred during disruption if vouchers were not redeemed\n(d) Government ID copy matching the ticketed passenger name.",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": true,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  },
+  {
+    "chunk_id": "chunk-0cb0da1ea6b6243d",
+    "clause_id": "INDIGO-GEN",
+    "section_title": "6. ESCALATIONS AND DISPUTE RESOLUTION",
+    "document_title": "IndiGo Passenger Charter & Conditions of Carriage",
+    "text": "6. ESCALATIONS AND DISPUTE RESOLUTION\nIf the customer relations response is deemed unsatisfactory, passengers may escalate to:\n(a) IndiGo Customer Grievance Officer: grievances@goindigo.in\n(b) Ministry of Civil Aviation AirSewa Portal: https://airsewa.gov.in",
+    "metadata": {
+      "source": "INDIGO_CHARTER",
+      "category": "airline_policy",
+      "mentions_alternate_flight": false,
+      "mentions_contact_details": false,
+      "mentions_time_limit": false
+    }
+  }
+]

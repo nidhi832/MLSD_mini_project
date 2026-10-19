@@ -1,0 +1,13 @@
+{
+  "build_timestamp": "2026-10-19T16:14:16Z",
+  "source_versions": {
+    "dgca_car": "Section 3 Series M Part IV Rev 4 (15 Feb 2023)",
+    "airline_charter": "IndiGo Passenger Charter 6E-COC-2023-V2"
+  },
+  "total_chunks": 52,
+  "newly_embedded": 0,
+  "reused_chunks": 52,
+  "duration_seconds": 0.001,
+  "throughput_chunks_per_second": 52000.0,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2"
+}

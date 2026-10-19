@@ -1,0 +1,92 @@
+services:
+  # Service 1: Ingestion Gateway & Web Client API (D1, F1, A4, A8)
+  api:
+    build: .
+    container_name: claim_api_gateway
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - API_PORT=8000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LLM_PROVIDER=stub
+      - VECTOR_INDEX_DIR=./data/vector_store
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Service 2: Scalable Agent Reasoning Worker (A1, A2, A7)
+  agent-worker:
+    build: .
+    command: ["python", "-m", "src.api.worker"]
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LLM_PROVIDER=stub
+      - VECTOR_INDEX_DIR=./data/vector_store
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  # Service 3: Message Queue & Caching Layer (A4, D7)
+  redis:
+    image: redis:7.2-alpine
+    container_name: claim_redis_queue
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Service 4: Prometheus Metrics Scraper (D5, A6)
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: claim_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      api:
+        condition: service_started
+
+  # Service 5: Grafana Operational Dashboard (D5, A6)
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: claim_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # Service 6: Jaeger Distributed Tracing (D5)
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: claim_jaeger
+    restart: always
+    ports:
+      - "16686:16686" # Web UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
