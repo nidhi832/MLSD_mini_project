@@ -28,3 +28,7 @@ data/quarantine/*.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Generated at build time
+data/vector_store/faiss/
+.hf_cache/

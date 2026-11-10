@@ -1,141 +1,132 @@
 """
-Evaluation Batch Runner & Comparison CLI (L2, L3).
-Runs the 20-scenario benchmark suite, computes Groundedness, Context Relevance,
-Faithfulness, and Hallucination rate, and reports Before vs After metrics.
+Evaluation batch runner (L2, L3).
+
+    python -m src.eval.runner                 # evaluate v2.0 on the 20 scenarios
+    python -m src.eval.runner --compare       # v1.0 vs v2.0, all four metrics before/after
+    python -m src.eval.runner --compare --out data/runs/eval_report.json
+
+The two variants are real configurations of the same agent, run on the same set:
+  v1.0 (before): baseline prompt; one retrieval pass, answer from what came back,
+                 no reference following, no re-search when verification fails.
+  v2.0 (after):  step-back prompt; agentic loop that follows cross-references,
+                 searches again with a query derived from what it read, and
+                 re-searches / escalates when verification fails.
+The deliberate change between them is enabling steps 2-5 of spec section 5.
 """
 
-import os
-import sys
-import json
-import time
 import argparse
-from typing import Dict, Any, List
+import json
+import os
+from typing import Any, Dict
 
-from src.core.contracts import PassengerClaimRequest
-from src.ingestion.vector_store import RegulatoryVectorStore
-from src.agents.orchestrator import MultiAgentTriageOrchestrator
 from src.agents.llm_client import LLMClient
+from src.agents.orchestrator import MultiAgentTriageOrchestrator
+from src.core.contracts import PassengerClaimRequest
 from src.eval.metrics import LLMOpsMetrics
+from src.ingestion.vector_store import RegulatoryVectorStore
+
+METRICS = ["groundedness", "context_relevance", "faithfulness", "hallucination_rate", "supporting_passage_recall"]
 
 
-def run_evaluation_suite(
-    eval_file: str = "data/evaluation_set_20.json",
-    prompt_version: str = "v2.0",
-    simulated_v1_mode: bool = False,
-) -> Dict[str, Any]:
+def run_evaluation_suite(eval_file: str = "data/evaluation_set_20.json", prompt_version: str = "v2.0",
+                         orchestrator: MultiAgentTriageOrchestrator = None) -> Dict[str, Any]:
     with open(eval_file, "r", encoding="utf-8") as f:
         scenarios = json.load(f)
+    orch = orchestrator or MultiAgentTriageOrchestrator(vector_store=RegulatoryVectorStore(), llm_client=LLMClient())
 
-    vstore = RegulatoryVectorStore()
-    llm = LLMClient()
-    orchestrator = MultiAgentTriageOrchestrator(vector_store=vstore, llm_client=llm)
-
-    groundedness_scores = []
-    context_relevance_scores = []
-    faithfulness_scores = []
-    scenario_results = []
-
+    rows = []
     for item in scenarios:
-        claim_data = item["claim_payload"]
-        claim = PassengerClaimRequest.model_validate(claim_data)
-
-        # In baseline v1.0 mode, simulated naive single-stage retriever fails on Section 4.1 conditional modifier
-        used_version = "v1.0" if simulated_v1_mode else prompt_version
-
-        res = orchestrator.execute_claim_triage(claim, prompt_version=used_version)
-        res_dict = res.model_dump()
-
-        if simulated_v1_mode and item["id"] == "SCENARIO-01":
-            # Baseline v1.0 failure mode: unaware of alternate flight modifier, blindly awards cash
-            res_dict["routing_decision"] = "pay-as-computed"
-            res_dict["monetary_compensation_inr"] = 10000.0
-
-        # Retrieve passages for groundedness measurement
-        passages = vstore.search(claim.free_text_claim_narrative, top_k=4)
-
-        g_score = LLMOpsMetrics.compute_groundedness(res_dict, passages)
-        cr_score = LLMOpsMetrics.compute_context_relevance(claim_data, passages)
-        f_score = LLMOpsMetrics.compute_faithfulness(res_dict, item)
-
-        groundedness_scores.append(g_score)
-        context_relevance_scores.append(cr_score)
-        faithfulness_scores.append(f_score)
-
-        scenario_results.append({
+        claim = PassengerClaimRequest.model_validate(item["claim_payload"])
+        res = orch.execute_claim_triage(claim, prompt_version=prompt_version).model_dump(mode="json")
+        passages = res.get("retrieved_passages", [])
+        g = LLMOpsMetrics.compute_groundedness(res, passages)
+        rows.append({
             "id": item["id"],
             "title": item["title"],
             "expected_routing": item["expected_routing"],
-            "actual_routing": str(res_dict["routing_decision"]),
+            "actual_routing": res["routing_decision"],
             "expected_comp": item["expected_compensation_inr"],
-            "actual_comp": res_dict["monetary_compensation_inr"],
-            "groundedness": g_score,
-            "faithfulness": f_score,
+            "actual_comp": res["monetary_compensation_inr"],
+            "groundedness": g,
+            "context_relevance": LLMOpsMetrics.compute_context_relevance(item["claim_payload"], passages),
+            "faithfulness": LLMOpsMetrics.compute_faithfulness(res, item),
+            "hallucination": LLMOpsMetrics.is_hallucination(res, item, g),
+            "supporting_passage_recall": LLMOpsMetrics.supporting_passage_retrieved(item, passages),
+            "tool_calls": res["tool_calls_made"],
+            "cost_usd": res["cost_usd"],
+            "latency_s": res["execution_time_seconds"],
         })
 
-    avg_groundedness = round(sum(groundedness_scores) / len(groundedness_scores), 4)
-    avg_cr = round(sum(context_relevance_scores) / len(context_relevance_scores), 4)
-    avg_faithfulness = round(sum(faithfulness_scores) / len(faithfulness_scores), 4)
-    avg_hallucination = LLMOpsMetrics.compute_hallucination_rate(avg_faithfulness)
-
+    n = len(rows)
+    avg = lambda k: round(sum(float(r[k]) for r in rows) / n, 4)  # noqa: E731
     return {
-        "prompt_version": used_version,
-        "scenarios_evaluated": len(scenarios),
-        "groundedness": avg_groundedness,
-        "context_relevance": avg_cr,
-        "faithfulness": avg_faithfulness,
-        "hallucination_rate": avg_hallucination,
-        "scenario_results": scenario_results,
+        "prompt_version": prompt_version,
+        "llm_provider": orch.llm_client.provider,
+        "scenarios_evaluated": n,
+        "groundedness": avg("groundedness"),
+        "context_relevance": avg("context_relevance"),
+        "faithfulness": avg("faithfulness"),
+        "hallucination_rate": round(sum(r["hallucination"] for r in rows) / n, 4),
+        "supporting_passage_recall": avg("supporting_passage_recall"),
+        "correct_outcomes": sum(1 for r in rows if r["faithfulness"] == 1.0),
+        "avg_tool_calls": avg("tool_calls"),
+        "cost_per_100_runs_usd": round(sum(r["cost_usd"] for r in rows) / n * 100, 4),
+        "scenario_results": rows,
     }
 
 
+def _print_single(r: Dict[str, Any]):
+    print(f"Variant {r['prompt_version']} (LLM provider: {r['llm_provider']}), {r['scenarios_evaluated']} scenarios")
+    for m in METRICS:
+        print(f"  {m:<26}: {r[m]}")
+    print(f"  correct outcomes          : {r['correct_outcomes']}/{r['scenarios_evaluated']}")
+    print(f"  avg tool calls per run    : {r['avg_tool_calls']}")
+    print(f"  cost per 100 runs (USD)   : {r['cost_per_100_runs_usd']}")
+    wrong = [s for s in r["scenario_results"] if s["faithfulness"] < 1.0]
+    for s in wrong:
+        print(f"    x {s['id']}: expected {s['expected_routing']} INR {s['expected_comp']:,.0f}, "
+              f"got {s['actual_routing']} INR {s['actual_comp']:,.0f}")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Run 20-Scenario Evaluation Suite (L2, L3)")
+    parser = argparse.ArgumentParser(description="Run the 20-scenario evaluation suite (L2, L3)")
     parser.add_argument("--eval-file", default="data/evaluation_set_20.json")
-    parser.add_argument("--compare", action="store_true", help="Compare Prompt v1.0 vs Prompt v2.0")
+    parser.add_argument("--compare", action="store_true", help="Compare v1.0 (before) with v2.0 (after)")
+    parser.add_argument("--out", default=None, help="Write the full report as JSON to this path")
     args = parser.parse_args()
 
-    print("=" * 70)
-    print("AIR PASSENGER CLAIM TRIAGE - 20-SCENARIO EVALUATION SUITE (L3)")
-    print("=" * 70)
+    orch = MultiAgentTriageOrchestrator(vector_store=RegulatoryVectorStore(), llm_client=LLMClient())
+    print("=" * 74)
+    print("AIR PASSENGER CLAIM TRIAGE - EVALUATION SUITE (L2, L3)")
+    print("=" * 74)
 
+    report: Dict[str, Any]
     if args.compare:
-        print("[*] Running Baseline Variant: Prompt v1.0 (Single-Stage Retrieval)...")
-        results_v1 = run_evaluation_suite(args.eval_file, prompt_version="v1.0", simulated_v1_mode=True)
-
-        print("[*] Running Advanced Variant: Prompt v2.0 (Multi-Agent Step-Back)...")
-        results_v2 = run_evaluation_suite(args.eval_file, prompt_version="v2.0", simulated_v1_mode=False)
-
-        print("\n" + "=" * 70)
-        print("EVALUATION COMPARISON REPORT (L2, L3): BEFORE vs AFTER")
-        print("=" * 70)
-        print(f"{'Metric':<24} | {'Before (Prompt v1.0)':<20} | {'After (Prompt v2.0)':<20} | {'Delta':<10}")
-        print("-" * 70)
-
-        for metric in ["groundedness", "context_relevance", "faithfulness", "hallucination_rate"]:
-            v1_val = results_v1[metric]
-            v2_val = results_v2[metric]
-            diff = round(v2_val - v1_val, 4)
-            diff_str = f"+{diff}" if diff > 0 else f"{diff}"
-            print(f"{metric.capitalize():<24} | {v1_val:<20} | {v2_val:<20} | {diff_str:<10}")
-
-        print("=" * 70)
-        print("Summary of Deliberate Change:")
-        print("  - Prompt v1.0 blind retriever fails on Section 4.1 by awarding INR 10,000 compensation")
-        print("    despite alternate flight acceptance.")
-        print("  - Prompt v2.0 multi-agent verifier inspects modifying conditions under CAR 3.3.2,")
-        print("    correctly routes to request-further-evidence, awards INR 0 compensation,")
-        print("    and preserves meals/refreshments facilities entitlement!")
-        print(f"  - Faithfulness improved by +{round(results_v2['faithfulness'] - results_v1['faithfulness'], 4)}")
-        print(f"  - Hallucination rate dropped by -{round(results_v1['hallucination_rate'] - results_v2['hallucination_rate'], 4)}")
-        print("=" * 70)
-
+        before = run_evaluation_suite(args.eval_file, "v1.0", orch)
+        after = run_evaluation_suite(args.eval_file, "v2.0", orch)
+        print(f"{'Metric':<27}| {'Before (v1.0)':<14}| {'After (v2.0)':<14}| Change")
+        print("-" * 74)
+        for m in METRICS:
+            d = round(after[m] - before[m], 4)
+            print(f"{m:<27}| {before[m]:<14}| {after[m]:<14}| {'+' if d > 0 else ''}{d}")
+        print(f"{'correct outcomes':<27}| {before['correct_outcomes']:<14}| {after['correct_outcomes']:<14}|")
+        print(f"{'avg tool calls per run':<27}| {before['avg_tool_calls']:<14}| {after['avg_tool_calls']:<14}|")
+        print("-" * 74)
+        print("Deliberate change: enable reference following, a derived second search and")
+        print("verification-driven re-search (spec section 5, steps 2-5).")
+        for label, r in (("before", before), ("after", after)):
+            wrong = [s["id"] for s in r["scenario_results"] if s["faithfulness"] < 1.0]
+            print(f"  wrong outcomes {label}: {', '.join(wrong) or 'none'}")
+        report = {"before": before, "after": after}
     else:
-        results = run_evaluation_suite(args.eval_file, prompt_version="v2.0")
-        print(f"Evaluated: {results['scenarios_evaluated']} scenarios")
-        print(f"  Groundedness        : {results['groundedness']}")
-        print(f"  Context Relevance   : {results['context_relevance']}")
-        print(f"  Faithfulness        : {results['faithfulness']}")
-        print(f"  Hallucination Rate  : {results['hallucination_rate']}")
+        report = run_evaluation_suite(args.eval_file, "v2.0", orch)
+        _print_single(report)
+
+    if args.out:
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, default=str)
+        print(f"Full report written to {args.out}")
 
 
 if __name__ == "__main__":

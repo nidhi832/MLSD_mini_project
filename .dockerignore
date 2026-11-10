@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+venv
+env
+data/runs/*.json
+data/vector_store/faiss
+data/feedback_test
+*.log
+.hf_cache

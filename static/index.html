@@ -1593,6 +1593,25 @@
       } else {
         citWrap.innerHTML = '<p style="color:#64748b; font-size:13px;">No citations applicable.</p>';
       }
+
+      // Escalation path and agent steps (A8)
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      let extra = '';
+      if (res.routing_decision === 'escalate') {
+        extra += `<div class="citation-card" style="border-left-color:#7c3aed;">
+            <div class="citation-title">Escalation path</div>
+            <div class="citation-rel">${esc(res.escalation_reason)}<br>
+            Next: a customer relations officer reviews the claim. If the passenger is still aggrieved they can escalate
+            to the airline's appellate authority or the Ministry of Civil Aviation AirSewa portal (CAR 3.6.1).</div></div>`;
+      }
+      const steps = (res.agent_trace || []).filter(t => t.node === 'plan' && t.action && t.action.tool !== 'finish');
+      if (steps.length) {
+        extra += `<details style="margin-top:10px; font-size:13px;"><summary style="cursor:pointer; font-weight:600;">
+            How the agent reached this (${steps.length} tool calls, verification ${res.self_verification_passed ? 'passed' : 'failed'})</summary><ol style="margin:8px 0 0 18px;">` +
+          steps.map(t => `<li><b>${esc(t.action.tool)}</b> ${esc(JSON.stringify(t.action.args))} <span style="color:#64748b;">— ${esc(t.action.reason)} [${esc(t.action.by)}]</span></li>`).join('') +
+          `</ol></details>`;
+      }
+      citWrap.insertAdjacentHTML('beforeend', extra);
     }
   </script>
 </body>

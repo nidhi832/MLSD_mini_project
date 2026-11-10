@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -9,20 +11,30 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Claim Submission Rate (Throughput)",
       "type": "stat",
       "targets": [
         {
-          "expr": "sum(rate(claim_submissions_total[1m]))",
+          "expr": "sum(rate(claim_submissions_total{status=\"accepted\"}[1m]))",
           "legendFormat": "RPS"
         }
       ]
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
       "id": 2,
       "title": "p95 Run Latency (SLO <= 5.0s)",
       "type": "gauge",
@@ -38,9 +50,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 3.5 },
-              { "color": "red", "value": 5.0 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3.5
+              },
+              {
+                "color": "red",
+                "value": 5.0
+              }
             ]
           },
           "unit": "s"
@@ -49,13 +70,18 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
       "id": 3,
       "title": "Cumulative Cost (USD)",
       "type": "stat",
       "targets": [
         {
-          "expr": "llm_cost_usd_total",
+          "expr": "sum(llm_cost_usd_total)",
           "legendFormat": "Total Cost USD"
         }
       ],
@@ -67,13 +93,18 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
       "id": 4,
       "title": "Cache Hit Ratio (D7)",
       "type": "stat",
       "targets": [
         {
-          "expr": "rate(cache_requests_total{result='hit'}[1m]) / (rate(cache_requests_total[1m]) + 0.0001)",
+          "expr": "sum(rate(cache_requests_total{result=\"hit\"}[5m])) / (sum(rate(cache_requests_total[5m])) + 0.0001)",
           "legendFormat": "Hit Ratio"
         }
       ],
@@ -85,7 +116,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
       "id": 5,
       "title": "Latency Distribution (p50 vs p95)",
       "type": "timeseries",
@@ -102,7 +138,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
       "id": 6,
       "title": "Agent Activity & Tool Invocations (A6)",
       "type": "timeseries",
@@ -116,12 +157,452 @@
           "legendFormat": "Tool Calls - {{tool_name}}"
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 7,
+      "title": "Task Success Rate per Agent (A6)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (agent_name) (rate(agent_runs_total{outcome=\"success\"}[5m])) / sum by (agent_name) (rate(agent_runs_total[5m]))",
+          "legendFormat": "{{agent_name}} success",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "title": "Error Rate & Escalation Rate",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(agent_runs_total{outcome=\"failed\"}[5m])) / (sum(rate(agent_runs_total{agent_name=\"reasoner\"}[5m])) + 0.0001)",
+          "legendFormat": "failed runs",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(agent_runs_total{outcome=\"escalated\"}[5m])) / (sum(rate(agent_runs_total{agent_name=\"reasoner\"}[5m])) + 0.0001)",
+          "legendFormat": "escalated runs",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(claim_submissions_total{status=\"quarantined\"}[5m])) / (sum(rate(claim_submissions_total[5m])) + 0.0001)",
+          "legendFormat": "quarantined submissions",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 9,
+      "title": "Steps & Tool Calls per Run (A6)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(agent_steps_per_run_sum[5m])) / sum(rate(agent_steps_per_run_count[5m]))",
+          "legendFormat": "graph steps / run",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(agent_tool_calls_per_run_sum[5m])) / sum(rate(agent_tool_calls_per_run_count[5m]))",
+          "legendFormat": "tool calls / run",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 10,
+      "title": "p95 Latency per Agent Step (A6)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, agent_name, step) (rate(agent_step_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{agent_name}} / {{step}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 11,
+      "title": "Retry Rate (A6)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (agent_name, kind) (rate(agent_retries_total[5m]))",
+          "legendFormat": "{{agent_name}} {{kind}} retries/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "id": 12,
+      "title": "Self-Verification Outcomes (A3)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(agent_verification_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 38
+      },
+      "id": 13,
+      "title": "Availability (Prometheus up) per Service",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "avg by (job) (up)",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 38
+      },
+      "id": 14,
+      "title": "Container Uptime (A6)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max by (service) (container_uptime_seconds)",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 38
+      },
+      "id": 15,
+      "title": "Throughput: Completed Runs/s",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(claim_run_latency_seconds_count[1m]))",
+          "legendFormat": "runs/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 46
+      },
+      "id": 16,
+      "title": "CPU per Service (process)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (job, instance) (rate(process_cpu_seconds_total[1m]))",
+          "legendFormat": "{{job}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 46
+      },
+      "id": 17,
+      "title": "Memory per Service (process RSS)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (job, instance) (process_resident_memory_bytes)",
+          "legendFormat": "{{job}} {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 18,
+      "title": "CPU per Container (cAdvisor, --profile resources)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 19,
+      "title": "Memory per Container (cAdvisor, --profile resources)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (name) (container_memory_usage_bytes{name!=\"\"})",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "id": 20,
+      "title": "Live Run Quality (L6, sampled)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "avg by (metric) (live_run_quality_score)",
+          "legendFormat": "{{metric}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 62
+      },
+      "id": 21,
+      "title": "Analyst Feedback Satisfaction (L6)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(feedback_satisfaction_rate)",
+          "legendFormat": "satisfaction rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 62
+      },
+      "id": 22,
+      "title": "Index Freshness (D2)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(vector_index_age_seconds)",
+          "legendFormat": "index age",
+          "refId": "A"
+        },
+        {
+          "expr": "max(vector_index_total_chunks)",
+          "legendFormat": "chunks",
+          "refId": "B"
+        }
+      ]
     }
   ],
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["mlops", "agentops", "aviation"],
-  "time": { "from": "now-15m", "to": "now" },
+  "tags": [
+    "mlops",
+    "agentops",
+    "aviation"
+  ],
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "title": "Air Passenger Claim Triage - AgentOps Dashboard",
-  "uid": "claim-triage-dash"
+  "uid": "claim-triage-dash",
+  "refresh": "5s"
 }

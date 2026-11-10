@@ -16,9 +16,14 @@ from src.core.feedback import FeedbackStore, FeedbackSubmission
 from src.core.observability import (
     RunReconstructionStore,
     CLAIM_SUBMISSIONS_TOTAL,
+    CLAIM_RUN_LATENCY,
     get_prometheus_metrics,
     logger,
+    publish_index_metrics,
+    FEEDBACK_SATISFACTION_GAUGE,
 )
+from src.core.cache import ClaimCache
+from src.core.tracing import inject_context, span
 from src.guardrails.input_guardrails import InputGuardrails
 from src.agents.orchestrator import MultiAgentTriageOrchestrator
 from src.ingestion.vector_store import RegulatoryVectorStore
@@ -28,12 +33,20 @@ router = APIRouter(prefix="/api/v1")
 
 # Singletons for service dependencies
 quarantine_store = QuarantineStore()
-task_queue = TaskQueue()
-rate_limiter = TokenBucketRateLimiter()
+import os
+task_queue = TaskQueue(queue_name=os.getenv("CLAIM_QUEUE_NAME", "claim_processing_queue"))
+rate_limiter = TokenBucketRateLimiter(
+    rate_per_second=float(os.getenv("CLIENT_RATE_LIMIT_RPS", "10")),
+    burst_capacity=float(os.getenv("CLIENT_RATE_LIMIT_BURST", "20")),
+)
 feedback_store = FeedbackStore()
 run_store = RunReconstructionStore()
 vector_store = RegulatoryVectorStore()
 shared_llm_client = LLMClient()
+claim_cache = ClaimCache()
+publish_index_metrics(vector_store.get_freshness())
+
+DEMO_FAULTS = {"unsupported_citation"}
 
 
 @router.post("/claims", status_code=202)
@@ -41,6 +54,8 @@ async def submit_passenger_claim(
     request: Request,
     raw_payload: Dict[str, Any],
     prompt_version: str = Query("v2.0", description="Prompt variant version (L2)"),
+    demo_fault: Optional[str] = Query(None, description="Demo item 6: 'unsupported_citation' injects a citation "
+                                                        "the agent never retrieved, to show self-verification catching it"),
 ):
     """
     Ingestion Endpoint (F1, F2, D1, A4).
@@ -48,10 +63,11 @@ async def submit_passenger_claim(
     Quarantines rejected payloads and enqueues valid claims asynchronously.
     """
     client_ip = request.client.host if request.client else "unknown"
+    client_id = request.headers.get("X-Client-ID") or client_ip  # per-client budget (D7)
     correlation_id = request.headers.get("X-Correlation-ID", f"corr-{uuid.uuid4().hex[:8]}")
 
     # 1. Rate Limiting (D7)
-    allowed, tokens = rate_limiter.is_allowed(client_ip)
+    allowed, tokens = rate_limiter.is_allowed(client_id)
     if not allowed:
         CLAIM_SUBMISSIONS_TOTAL.labels(status="rate_limited").inc()
         raise HTTPException(
@@ -120,37 +136,46 @@ async def submit_passenger_claim(
         )
 
     # 4. Asynchronous Execution Enqueue (A4)
+    if prompt_version not in ("v1", "v1.0", "v2", "v2.0"):
+        raise HTTPException(status_code=400, detail=f"Unknown prompt_version '{prompt_version}'")
+    if demo_fault and demo_fault not in DEMO_FAULTS:
+        raise HTTPException(status_code=400, detail=f"Unknown demo_fault '{demo_fault}'")
     run_id = f"run-{uuid.uuid4().hex[:12]}"
-    task_data = {
-        "run_id": run_id,
-        "correlation_id": correlation_id,
-        "claim_data": claim_request.model_dump(mode="json"),
-        "prompt_version": prompt_version,
-        "submitted_at": time.time(),
-    }
+    submitted_at = time.time()
 
-    # If running in direct/synchronous or memory queue mode where worker is inline
-    if not task_queue.is_using_redis():
-        # Immediate in-memory execution for standalone local convenience
-        orch = MultiAgentTriageOrchestrator(vector_store=vector_store, llm_client=shared_llm_client)
-        result = orch.execute_claim_triage(claim_request, correlation_id=correlation_id, prompt_version=prompt_version)
-        result_dict = result.model_dump(mode="json")
-        run_store.save_run(run_id, {
-            "status": "COMPLETED",
-            "result": result_dict,
-            "worker_id": "inline-worker",
-            "cached": False,
-            "completed_at": time.time(),
-        })
-    else:
-        # Enqueue for background worker process
-        run_store.save_run(run_id, {
+    with span("api.submit_claim", {"run_id": run_id, "correlation_id": correlation_id,
+                                   "disruption_type": claim_request.disruption_type.value}):
+        task_data = {
             "run_id": run_id,
             "correlation_id": correlation_id,
-            "status": "QUEUED",
-            "submitted_at": time.time(),
-        })
-        task_queue.enqueue(task_data)
+            "claim_data": claim_request.model_dump(mode="json"),
+            "prompt_version": prompt_version,
+            "submitted_at": submitted_at,
+            "demo_fault": demo_fault,
+            "trace_context": inject_context(),
+        }
+
+        if not task_queue.is_using_redis():
+            # No Redis (local run without Docker): execute both agents inline
+            orch = MultiAgentTriageOrchestrator(vector_store=vector_store, llm_client=shared_llm_client)
+            result = orch.execute_claim_triage(claim_request, correlation_id=correlation_id,
+                                               prompt_version=prompt_version, run_id=run_id, demo_fault=demo_fault)
+            CLAIM_RUN_LATENCY.observe(time.time() - submitted_at)
+            run_store.save_run(run_id, {
+                "status": "COMPLETED",
+                "result": result.model_dump(mode="json"),
+                "worker_id": "inline-worker",
+                "cached": False,
+                "completed_at": time.time(),
+            })
+        else:
+            run_store.save_run(run_id, {
+                "run_id": run_id,
+                "correlation_id": correlation_id,
+                "status": "QUEUED",
+                "submitted_at": submitted_at,
+            })
+            task_queue.enqueue(task_data)
 
     CLAIM_SUBMISSIONS_TOTAL.labels(status="accepted").inc()
 
@@ -170,6 +195,18 @@ async def get_claim_run_status(run_id: str):
     if not run_data:
         raise HTTPException(status_code=404, detail=f"Run ID '{run_id}' not found.")
     return run_data
+
+
+@router.get("/runs")
+async def list_recent_runs(limit: int = 20):
+    """Most recent runs (D5)."""
+    return run_store.list_recent_runs(limit=limit)
+
+
+@router.get("/index/freshness")
+async def get_index_freshness():
+    """Data freshness of the vector index: build time, source versions, chunk count, throughput (D2)."""
+    return vector_store.get_freshness()
 
 
 @router.get("/contract")
@@ -199,7 +236,9 @@ async def get_quarantined_claim(quarantine_id: str):
 @router.post("/feedback")
 async def submit_feedback(feedback: FeedbackSubmission):
     """Analyst satisfaction feedback endpoint (L6)."""
-    return feedback_store.record_feedback(feedback)
+    record = feedback_store.record_feedback(feedback)
+    FEEDBACK_SATISFACTION_GAUGE.set(feedback_store.get_summary()["satisfaction_rate"])
+    return record
 
 
 @router.get("/feedback/summary")

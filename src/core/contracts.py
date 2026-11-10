@@ -5,7 +5,7 @@ Enforces schema, type, range, categorical, and cross-field validation (F1, F2, D
 
 from enum import Enum
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from pydantic import BaseModel, Field, model_validator, field_validator
 
@@ -232,4 +232,25 @@ class EntitlementEvaluationResult(BaseModel):
     tokens_completion: int = Field(default=0)
     cost_usd: float = Field(default=0.0)
     execution_time_seconds: float = Field(default=0.0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # ---- Run reconstruction (D5): everything needed to replay how the answer was reached ----
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    agent_trace: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Every graph step of Agent 2: action chosen, by whom (llm/policy), observation, latency.",
+    )
+    tool_call_log: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Every tool call with its parameters, returned clause ids and duration.",
+    )
+    retrieved_passages: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="The evidence the agent read; every citation quote must come from here.",
+    )
+    verification: Dict[str, Any] = Field(default_factory=dict, description="Self-verification outcome (A3).")
+    cost_breakdown: Dict[str, Any] = Field(default_factory=dict, description="Per-step tokens and cost (L5).")
+    degraded_mode: bool = Field(default=False, description="True if the model was unavailable and the fallback path was used (A5).")
+    degraded_reasons: List[str] = Field(default_factory=list)
+    error: Optional[str] = None

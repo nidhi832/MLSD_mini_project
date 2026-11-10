@@ -10,8 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from src.api.routes import router as api_router
-from src.core.observability import get_prometheus_metrics, logger
+os.environ.setdefault("OTEL_SERVICE_NAME", "claim-api-gateway")
+from src.core.tracing import init_tracing  # noqa: E402
+
+init_tracing()
+
+from src.api.routes import router as api_router  # noqa: E402
+from src.core.observability import get_prometheus_metrics, logger  # noqa: E402
+from src.core.shared_state import get_redis  # noqa: E402
 
 app = FastAPI(
     title="Air Passenger Claim Triage Service",
@@ -62,6 +68,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "air-passenger-claim-triage",
+        "queue_backend": "redis" if get_redis() is not None else "in-memory (inline execution)",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
