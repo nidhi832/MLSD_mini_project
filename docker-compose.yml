@@ -1,18 +1,35 @@
+# Air Passenger Claim Triage - all services.
+# Start everything:      docker compose up --build -d
+# Scale Agent 2:         docker compose up -d --scale agent-worker=3
+# Per-container CPU/mem: docker compose --profile resources up -d   (adds cAdvisor)
+#
+# Configuration comes from .env (copy .env.example). Nothing environment-specific
+# is hard-coded here (D4); values below are only service addresses inside Compose.
+
+x-app-env: &app-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  VECTOR_INDEX_DIR: /app/data/vector_store
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+
+x-app-env-file: &app-env-file
+  - path: .env
+    required: false
+
 services:
-  # Service 1: Ingestion Gateway & Web Client API (D1, F1, A4, A8)
+  # Service 1: API gateway - ingestion boundary, validation, quarantine, guardrails,
+  # rate limiting, run status, web client (F1, F2, D1, A4, A8, L4, L6, D7)
   api:
     build: .
+    image: mlsd_mini_project-app:latest
     container_name: claim_api_gateway
     restart: always
     ports:
       - "8000:8000"
+    env_file: *app-env-file
     environment:
-      - APP_ENV=production
-      - API_PORT=8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - LLM_PROVIDER=stub
-      - VECTOR_INDEX_DIR=./data/vector_store
+      <<: *app-env
+      OTEL_SERVICE_NAME: claim-api-gateway
     depends_on:
       redis:
         condition: service_healthy
@@ -21,25 +38,77 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 20s
 
-  # Service 2: Scalable Agent Reasoning Worker (A1, A2, A7)
-  agent-worker:
-    build: .
-    command: ["python", "-m", "src.api.worker"]
+  # Service 2: Agent 1 - classification & entity extraction (A2, F3)
+  classifier-agent:
+    image: mlsd_mini_project-app:latest   # same image the api service builds; built once, never pulled
+    pull_policy: never
+    command: ["python", "-m", "src.api.worker", "--role", "classifier"]
     restart: always
+    env_file: *app-env-file
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - LLM_PROVIDER=stub
-      - VECTOR_INDEX_DIR=./data/vector_store
+      <<: *app-env
+      OTEL_SERVICE_NAME: classifier-agent
+      WORKER_METRICS_PORT: "9100"
     depends_on:
       redis:
         condition: service_healthy
       api:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
-  # Service 3: Message Queue & Caching Layer (A4, D7)
+  # Service 3: Agent 2 - LangGraph regulatory reasoning & self-verification (A1, A3, F4-F7)
+  # Scalable: docker compose up -d --scale agent-worker=3 (A7)
+  agent-worker:
+    image: mlsd_mini_project-app:latest
+    pull_policy: never
+    command: ["python", "-m", "src.api.worker", "--role", "reasoner"]
+    restart: always
+    env_file: *app-env-file
+    environment:
+      <<: *app-env
+      OTEL_SERVICE_NAME: agent-worker
+      WORKER_METRICS_PORT: "9100"
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Service 4: LLM stub - OpenAI-compatible fixed responses after a realistic delay (D6, A5)
+  # Used when LLM_PROVIDER=stub-service (the default). Demo item 8: docker compose stop llm-stub
+  llm-stub:
+    image: mlsd_mini_project-app:latest
+    pull_policy: never
+    command: ["uvicorn", "src.stub.llm_stub:app", "--host", "0.0.0.0", "--port", "8100"]
+    container_name: claim_llm_stub
+    restart: unless-stopped
+    environment:
+      STUB_DELAY_SECONDS: ${STUB_DELAY_SECONDS:-0.6}
+      STUB_JITTER_SECONDS: ${STUB_JITTER_SECONDS:-0.2}
+      STUB_FAILURE_RATE: ${STUB_FAILURE_RATE:-0}
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Service 5: Queue, shared run store, whole-run cache, shared circuit-breaker state (A4, D7)
   redis:
     image: redis:7.2-alpine
     container_name: claim_redis_queue
@@ -52,7 +121,7 @@ services:
       timeout: 3s
       retries: 5
 
-  # Service 4: Prometheus Metrics Scraper (D5, A6)
+  # Service 6: Prometheus - scrapes the API, every agent replica and (optionally) cAdvisor (D5)
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: claim_prometheus
@@ -65,7 +134,7 @@ services:
       api:
         condition: service_started
 
-  # Service 5: Grafana Operational Dashboard (D5, A6)
+  # Service 7: Grafana dashboard (D5, A6)
   grafana:
     image: grafana/grafana:10.4.0
     container_name: claim_grafana
@@ -73,7 +142,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -81,12 +150,29 @@ services:
     depends_on:
       - prometheus
 
-  # Service 6: Jaeger Distributed Tracing (D5)
+  # Service 8: Jaeger - receives OpenTelemetry traces over OTLP (D5)
   jaeger:
     image: jaegertracing/all-in-one:1.56
     container_name: claim_jaeger
     restart: always
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686" # Web UI
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+
+  # Optional: per-container CPU / memory for the dashboard (D5)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: claim_cadvisor
+    profiles: ["resources"]
+    restart: always
+    privileged: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro

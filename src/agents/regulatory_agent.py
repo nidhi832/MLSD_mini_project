@@ -1,393 +1,500 @@
 """
-Agent 2: Regulatory Entitlement, Reasoning & Self-Verification Agent (F4-F7, A1-A3).
-Chooses when and what tools to call, analyzes modifying conditions and exemptions,
-verifies citations against retrieved passages, and handles the Section 4.1 test case.
+Agent 2: Regulatory Entitlement & Self-Verification Agent, built with LangGraph (A1, A3, F4-F7).
+
+Graph:
+
+    START -> plan --(tool chosen)--> run_tool -> plan -> ...
+               \\--(finish)--> decide -> verify --(pass)--> finalize -> END
+                                           |--(retry: re-search with another strategy)--> plan
+                                           \\--(still unsupported)--> escalate -> END
+
+* plan      The agent chooses the next tool call. With a real LLM configured, the
+            model picks the tool and its arguments from the claim, the clauses read
+            so far and the unread cross-references. In stub mode (load tests) a
+            deterministic policy makes the same kind of choices.
+* run_tool  Executes corpus_search / lookup_clause_by_id / get_claim_field, adds the
+            passages to the evidence, and scans them for references to other
+            provisions ("under Clause 3.7 and 3.8", "Provisions of 3.3.2 shall
+            apply"). Unread references become pending, so the agent goes and reads
+            the provision that modifies the one it found (spec section 5, steps 1-3).
+* decide    Evidence-gated entitlement calculation (see entitlement_rules.py): only
+            provisions present in the retrieved passages can be applied or cited.
+* verify    Every citation must resolve to a line of retrieved text (A3). If not,
+            the agent re-searches with a different strategy (direct clause lookup +
+            hybrid search) up to MAX_VERIFY_RETRIES times, then escalates.
+            An unverified answer is never returned.
+
+Loop bounds (A1): max graph steps, max tool calls and a wall-clock deadline. Hitting
+any bound means the run did not complete, so it is escalated, not answered (A5).
 """
 
-from typing import Dict, Any, List, Tuple, Optional
-from src.core.contracts import (
-    DisruptionType,
-    RoutingDecision,
-    Citation,
-)
-from src.tools.claim_tools import ClaimToolBox
+import json
+import re
+import time
+from typing import Any, Dict, List, Optional, TypedDict
+
+from langgraph.graph import StateGraph, START, END
+
+from src.agents import entitlement_rules as rules
 from src.agents.llm_client import LLMClient
+from src.core.contracts import Citation, RoutingDecision
+from src.core.observability import (
+    AGENT_STEP_LATENCY,
+    RETRY_COUNTER,
+    VERIFICATION_COUNTER,
+    logger,
+)
+from src.core.tracing import span
+from src.tools.claim_tools import ClaimToolBox
+
+MAX_VERIFY_RETRIES = 2
+MAX_PENDING_REFS = 6
+TOOLS = ("corpus_search", "lookup_clause_by_id", "get_claim_field", "finish")
+
+_REF_RE = re.compile(
+    r"(?:clause|paragraph|provisions? of|as per|under|car)\s+"
+    r"(\d+\.\d+(?:\.\d+)?(?:\s*(?:,|and|&|/|or)\s*\d+\.\d+(?:\.\d+)?)*)",
+    re.IGNORECASE,
+)
+_NUM_RE = re.compile(r"\d+\.\d+(?:\.\d+)?")
+
+# Facts a provision may hinge on: if a retrieved provision mentions the phrase,
+# the agent checks the corresponding field of the claim with get_claim_field.
+_FIELD_TRIGGERS = [
+    ("contact details", "contact_details_provided_at_booking"),
+    ("extraordinary circumstances", "cause_attribution"),
+    ("accepts an alternate flight", "accepted_alternate_flight"),
+    ("informed", "notice_hours_before_departure"),
+]
+_MODIFIER_TERMS = ["alternate flight", "contact details", "extraordinary circumstances", "refund",
+                   "meals", "hotel", "block time", "notice", "volunteers"]
+
+
+class AgentState(TypedDict, total=False):
+    handoff: Dict[str, Any]
+    passages: List[Dict[str, Any]]
+    pending_refs: List[str]
+    followed_refs: List[str]
+    queries_done: List[str]
+    modifier_search_done: bool
+    fields_checked: List[str]
+    next_action: Dict[str, Any]
+    steps: int
+    verify_attempts: int
+    strategy: str
+    decision: Dict[str, Any]
+    verification: Dict[str, Any]
+    result: Dict[str, Any]
+    trace: List[Dict[str, Any]]
+    stop_reason: Optional[str]
 
 
 class RegulatoryReasoningAgent:
-    def __init__(self, llm_client: LLMClient, system_prompt: str, toolbox: ClaimToolBox):
-        self.llm_client = llm_client
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        system_prompt: str,
+        toolbox: ClaimToolBox,
+        prompt_version: str = "v2.0",
+        max_steps: int = 16,
+        max_tool_calls: int = 10,
+        deadline: Optional[float] = None,
+        correlation_id: Optional[str] = None,
+        demo_fault: Optional[str] = None,
+    ):
+        self.llm = llm_client
         self.system_prompt = system_prompt
         self.toolbox = toolbox
-        self.retrieved_passages: List[Dict[str, Any]] = []
+        self.baseline = prompt_version in ("v1", "v1.0")
+        self.max_steps = max_steps
+        self.max_tool_calls = max_tool_calls
+        self.deadline = deadline or (time.time() + 45.0)
+        self.correlation_id = correlation_id
+        self.demo_fault = demo_fault
+        self.degraded_reasons: List[str] = []
+        self.graph = self._build_graph()
 
-    def _execute_retrieval_strategy(self, handoff: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Multi-step tool calling (A1, F4).
-        Step 1: Retrieve primary disruption provision.
-        Step 2: Retrieve modifying conditions and exemptions.
-        Step 3: Retrieve non-monetary facilities provisions.
-        """
-        passages: List[Dict[str, Any]] = []
-        dtype = handoff["disruption_type"]
+    # ================================================================== graph
+    def _build_graph(self):
+        g = StateGraph(AgentState)
+        g.add_node("plan", self._timed("plan", self._plan))
+        g.add_node("run_tool", self._timed("run_tool", self._run_tool))
+        g.add_node("decide", self._timed("decide", self._decide))
+        g.add_node("verify", self._timed("verify", self._verify))
+        g.add_node("escalate", self._timed("escalate", self._escalate))
+        g.add_node("finalize", self._timed("finalize", self._finalize))
 
-        # Step 1: Base entitlement retrieval
-        if dtype == DisruptionType.CANCELLATION:
-            p1 = self.toolbox.lookup_clause_by_id("CAR-3.3.2")
-            if p1:
-                passages.append(p1)
-            else:
-                passages.extend(self.toolbox.corpus_search("cancellation compensation alternate flight block time", top_k=2))
+        g.add_edge(START, "plan")
+        g.add_conditional_edges("plan", lambda s: "decide" if s["next_action"]["tool"] == "finish" else "run_tool",
+                                {"decide": "decide", "run_tool": "run_tool"})
+        g.add_edge("run_tool", "plan")
+        g.add_edge("decide", "verify")
+        g.add_conditional_edges("verify", lambda s: s["verification"]["route"],
+                                {"pass": "finalize", "retry": "plan", "escalate": "escalate"})
+        g.add_edge("escalate", END)
+        g.add_edge("finalize", END)
+        return g.compile()
 
-            # Step 2: Modifying provisions & exemptions (CAR 3.3.4, Notice CAR 3.3.1)
-            p_ex = self.toolbox.lookup_clause_by_id("CAR-3.3.4")
-            if p_ex:
-                passages.append(p_ex)
+    def _timed(self, name, fn):
+        def wrapper(state: AgentState) -> AgentState:
+            t0 = time.time()
+            with span(f"agent2.{name}", {"correlation_id": self.correlation_id, "node": name}):
+                update = fn(state)
+            dt = time.time() - t0
+            AGENT_STEP_LATENCY.labels(agent_name="reasoner", step=name).observe(dt)
+            trace = list(state.get("trace", []))
+            event = {"node": name, "latency_seconds": round(dt, 4)}
+            event.update(update.pop("_event", {}))
+            trace.append(event)
+            update["trace"] = trace
+            return update
+        return wrapper
 
-            # Step 3: Non-monetary facilities (CAR 3.7 & 3.8)
-            p_fac = self.toolbox.lookup_clause_by_id("CAR-3.7")
-            if p_fac:
-                passages.append(p_fac)
-
-        elif dtype == DisruptionType.DELAY:
-            p1 = self.toolbox.lookup_clause_by_id("CAR-3.4.1")
-            p2 = self.toolbox.lookup_clause_by_id("CAR-3.4.2")
-            if p1:
-                passages.append(p1)
-            if p2:
-                passages.append(p2)
-            passages.extend(self.toolbox.corpus_search("flight delay free meals refreshments hotel block time", top_k=2))
-
-        elif dtype == DisruptionType.DENIED_BOARDING:
-            p1 = self.toolbox.lookup_clause_by_id("CAR-3.2.2")
-            if p1:
-                passages.append(p1)
-            else:
-                passages.extend(self.toolbox.corpus_search("denied boarding compensation alternate flight", top_k=2))
-
-        elif dtype == DisruptionType.DOWNGRADING:
-            p1 = self.toolbox.lookup_clause_by_id("CAR-3.5.1")
-            if p1:
-                passages.append(p1)
-            else:
-                passages.extend(self.toolbox.corpus_search("downgrading passenger refund domestic", top_k=2))
-
-        # Also retrieve airline charter reference
-        p_charter = self.toolbox.lookup_clause_by_id("INDIGO-3.2")
-        if p_charter:
-            passages.append(p_charter)
-
-        self.retrieved_passages = passages
-        return passages
-
+    # ================================================================== entry point
     def evaluate_entitlement(self, handoff: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Executes regulatory evaluation and self-verification.
-        """
-        # Step 1: Retrieval through tools
-        passages = self._execute_retrieval_strategy(handoff)
-
-        # F7 Check: Check for dispute or unknown route
-        cause = handoff["cause_attribution"].lower()
-        if "disputed" in cause or "unknown" in cause:
-            return self._build_escalation_result(
-                handoff,
-                reason="Cause attribution is contested between passenger and airline. Mandatory escalation under F7 / CAR 3.6.",
-                clause_id="CAR-3.6.1",
-            )
-
-        if handoff.get("operating_carrier") not in ("IndiGo", "Air India", "Vistara", "SpiceJet"):
-            return self._build_escalation_result(
-                handoff,
-                reason="Operating carrier falls outside current corpus scope (F7).",
-                clause_id="CAR-1.2",
-            )
-
-        # F3 / F4 / F5 Evaluation Logic
-        dtype = handoff["disruption_type"]
-        block_time = handoff["block_time_hours"]
-        notice_hours = handoff["notice_hours_before_departure"]
-        offered_alt = handoff["offered_alternate_flight"]
-        accepted_alt = handoff["accepted_alternate_flight"]
-        alt_delay = handoff["alternate_flight_delay_hours"]
-        contact_ok = handoff["contact_details_provided_at_booking"]
-        basic_fare = handoff["ticket_basic_fare_inr"]
-        fuel_charge = handoff["airline_fuel_charge_inr"]
-        total_fare = basic_fare + fuel_charge
-
-        citations: List[Citation] = []
-        routing: RoutingDecision = RoutingDecision.DECLINE
-        compensation_inr = 0.0
-        facilities: List[str] = []
-        refund = False
-        summary = ""
-
-        # --- CANCELLATION LOGIC (CAR 3.3) ---
-        if dtype == DisruptionType.CANCELLATION:
-            # Check 1: Passenger did not provide contact details (CAR 3.3.4.b)
-            if not contact_ok:
-                routing = RoutingDecision.DECLINE
-                compensation_inr = 0.0
-                summary = (
-                    "Claim declined under CAR Section 3 Series M Part IV Clause 3.3.4(b): "
-                    "The passenger failed to provide valid contact details at the time of booking, "
-                    "exempting the carrier from cancellation compensation liability."
-                )
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.3.4",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="The airline shall NOT be liable to pay compensation if: (b) The passenger failed to provide correct contact details at the time of booking",
-                        relevance="Exemption clause removing compensation liability due to missing contact details.",
-                    )
-                )
-
-            # Check 2: Notice provided > 2 weeks prior (CAR 3.3.1.a)
-            elif notice_hours >= 336.0:  # 14 days * 24h
-                routing = RoutingDecision.DECLINE
-                compensation_inr = 0.0
-                refund = True
-                summary = "Cancellation notice was provided more than 2 weeks prior to departure (CAR 3.3.1.a). Full refund or alternate flight applies; no statutory compensation."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.3.1",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="If informed of cancellation at least 2 weeks before scheduled departure: Airline shall offer an alternate flight or full refund of ticket. No compensation payable.",
-                        relevance="Advance notice exemption eliminating financial compensation.",
-                    )
-                )
-
-            # Check 3: Extraordinary circumstances (weather/atc)
-            elif cause in ("weather", "atc", "air_traffic_control", "runway_closure", "bird_strike"):
-                routing = RoutingDecision.DECLINE
-                compensation_inr = 0.0
-                summary = f"Claim declined under CAR 3.3.4(a): Cancellation precipitated by extraordinary circumstances beyond airline control ({cause})."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.3.4",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="The airline shall NOT be liable to pay compensation if: (a) The cancellation is caused by extraordinary circumstances beyond airline control",
-                        relevance="Statutory exemption for extraordinary circumstances.",
-                    )
-                )
-
-            # Check 4: SECTION 4.1 THE DIFFICULT CASE (Alternate flight accepted!)
-            elif accepted_alt:
-                # Under CAR 3.3.2 condition: If passenger accepts alternate flight, NO financial compensation is payable!
-                # BUT passenger IS owed facilities (meals & refreshments) during waiting time under CAR 3.3.2 & CAR 3.7!
-                routing = RoutingDecision.REQUEST_FURTHER_EVIDENCE if alt_delay >= 2.0 else RoutingDecision.DECLINE
-                compensation_inr = 0.0
-                refund = False
-                if alt_delay >= 2.0:
-                    facilities = ["Free meals and refreshments commensurate with waiting time at airport terminal"]
-                if alt_delay >= 24.0:
-                    facilities.append("Free hotel accommodation and airport transfers")
-
-                summary = (
-                    "Evaluation pursuant to Section 4.1 Benchmark and CAR 3.3.2: The passenger was informed of cancellation "
-                    "at the airport and accepted an alternate flight departing 4 hours later. Under paragraph 3.3.2, "
-                    "where an alternate flight is accepted by the passenger, financial cancellation compensation is NOT payable. "
-                    "However, under paragraph 3.3.2 and Clause 3.7, the airline remains strictly obligated to provide free meals "
-                    "and refreshments during the 4-hour waiting interval. Routed to request-further-evidence for refreshment expense reimbursement if vouchers were unredeemed."
-                )
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.3.2",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="Where the passenger accepts an alternate flight provided by the airline, the passenger shall NOT be entitled to financial compensation for cancellation under Clause 3.3.2. However, the airline remains strictly obligated to provide free of charge meals, refreshments, and facilities under Clause 3.7 and 3.8 during the waiting period.",
-                        relevance="Primary rule for Section 4.1: accepting alternate flight waives cancellation cash compensation but preserves facilities entitlement.",
-                    )
-                )
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.7",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="Meals and refreshments must be commensurate with waiting time and provided hygienically at the airport terminal.",
-                        relevance="Mandates meals and refreshments for waiting passenger.",
-                    )
-                )
-
-            # Check 5: Passenger was NOT offered or did not accept alternate flight -> Full CAR 3.3.2 compensation
-            else:
-                routing = RoutingDecision.PAY_AS_COMPUTED
-                refund = True
-                if block_time <= 1.0:
-                    max_cap = 5000.0
-                    clause_tier = "3.3.2.a"
-                elif block_time <= 2.0:
-                    max_cap = 7500.0
-                    clause_tier = "3.3.2.b"
-                else:
-                    max_cap = 10000.0
-                    clause_tier = "3.3.2.c"
-
-                compensation_inr = min(max_cap, total_fare)
-                summary = (
-                    f"Entitlement computed under CAR Clause {clause_tier}: Flight cancelled with notice < 24 hours, "
-                    f"no alternate flight accepted, block time {block_time}h. Entitled to INR {compensation_inr:,.0f} "
-                    f"(lower of INR {max_cap:,.0f} or basic fare + fuel surcharge) plus full ticket refund."
-                )
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.3.2",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote=f"Compensation scale: Clause {clause_tier} for block time {block_time}h up to INR {max_cap:,.0f} or booked one-way basic fare plus fuel charge.",
-                        relevance="Direct compensation entitlement tier for unaccommodated flight cancellation.",
-                    )
-                )
-
-        # --- DELAY LOGIC (CAR 3.4) ---
-        elif dtype == DisruptionType.DELAY:
-            delay_h = handoff["delay_hours"]
-            threshold = 2.0 if block_time <= 2.5 else (3.0 if block_time <= 5.0 else 4.0)
-
-            if delay_h >= threshold:
-                routing = RoutingDecision.PAY_AS_COMPUTED if delay_h >= 6.0 else RoutingDecision.REQUEST_FURTHER_EVIDENCE
-                facilities = ["Free meals and refreshments commensurate with waiting time (CAR 3.4.1)"]
-                if delay_h >= 24.0:
-                    facilities.append("Free hotel accommodation and ground transport (CAR 3.4.2)")
-                if delay_h >= 6.0:
-                    refund = True
-                summary = (
-                    f"Flight delayed by {delay_h}h for block time {block_time}h (threshold: {threshold}h). "
-                    f"Passenger entitled to facilities under CAR 3.4.1. "
-                    f"{'Full ticket refund option available under CAR 3.4.3.' if refund else ''}"
-                )
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.4.1",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="Airlines shall provide free meals and refreshments to passengers in proportion to waiting time",
-                        relevance="Mandates food/refreshment provision for delays exceeding block time thresholds.",
-                    )
-                )
-            else:
-                routing = RoutingDecision.DECLINE
-                summary = f"Delay of {delay_h}h did not meet the CAR 3.4.1 minimum threshold of {threshold}h for block time {block_time}h."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.4.1",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="Delay thresholds: block time up to 2.5 hrs: >2 hrs; 2.5-5 hrs: >3 hrs; >5 hrs: >4 hrs.",
-                        relevance="Statutory threshold not met.",
-                    )
-                )
-
-        # --- DENIED BOARDING LOGIC (CAR 3.2) ---
-        elif dtype == DisruptionType.DENIED_BOARDING:
-            if offered_alt and alt_delay <= 1.0:
-                routing = RoutingDecision.DECLINE
-                compensation_inr = 0.0
-                summary = "Alternate flight arranged within 1 hour of scheduled departure (CAR 3.2.2.a). No monetary compensation payable."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.2.2",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="If an alternate flight is arranged within 1 hour of scheduled departure: No monetary compensation, but facilitation provided.",
-                        relevance="1-hour alternate flight exemption.",
-                    )
-                )
-            elif offered_alt and alt_delay <= 24.0:
-                routing = RoutingDecision.PAY_AS_COMPUTED
-                compensation_inr = min(10000.0, 2.0 * total_fare)
-                summary = f"Involuntary denied boarding accommodated within 24 hours (CAR 3.2.2.b). Entitled to 200% basic fare + fuel (up to INR 10,000): INR {compensation_inr:,.0f}."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.2.2",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="If an alternate flight is arranged within 24 hours of original scheduled departure: An amount equal to 200% of booked one-way basic fare plus airline fuel charge, up to a maximum of INR 10,000.",
-                        relevance="200% compensation entitlement tier for denied boarding.",
-                    )
-                )
-            else:
-                routing = RoutingDecision.PAY_AS_COMPUTED
-                compensation_inr = min(20000.0, 4.0 * total_fare)
-                refund = True
-                summary = f"Involuntary denied boarding without alternate flight within 24 hours (CAR 3.2.2.c). Entitled to 400% basic fare + fuel (up to INR 20,000): INR {compensation_inr:,.0f} plus full refund."
-                citations.append(
-                    Citation(
-                        clause_id="CAR-3.2.2",
-                        document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                        quote="If an alternate flight is arranged beyond 24 hours or if passenger chooses not to travel: An amount equal to 400% of booked one-way basic fare plus airline fuel charge, up to a maximum of INR 20,000, plus full refund of ticket.",
-                        relevance="400% compensation + refund tier.",
-                    )
-                )
-
-        # --- DOWNGRADING LOGIC (CAR 3.5) ---
-        elif dtype == DisruptionType.DOWNGRADING:
-            routing = RoutingDecision.PAY_AS_COMPUTED
-            compensation_inr = round(0.75 * total_fare, 2)
-            summary = f"Involuntary downgrade on domestic sector (CAR 3.5.1.a). Entitled to 75% refund of ticket price: INR {compensation_inr:,.0f}."
-            citations.append(
-                Citation(
-                    clause_id="CAR-3.5.1",
-                    document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                    quote="Domestic flights: 75% of the ticket price including taxes and fees for the degraded sector.",
-                    relevance="75% domestic downgrade compensation.",
-                )
-            )
-
-        # -------------------------------------------------------------
-        # A3: SELF-VERIFICATION AGAINST RETRIEVED PASSAGES
-        # -------------------------------------------------------------
-        verification_passed, ungrounded_citation = self._verify_citations_against_passages(citations, passages)
-
-        if not verification_passed:
-            # A3 Fallback: If verification fails, retry with alternate query or escalate to human
-            return self._build_escalation_result(
-                handoff,
-                reason=f"Self-verification failed (A3): Citation '{ungrounded_citation}' could not be resolved directly to retrieved regulatory text.",
-                clause_id="CAR-3.6.1",
-            )
-
-        return {
-            "routing_decision": routing,
-            "monetary_compensation_inr": compensation_inr,
-            "facilities_entitled": facilities,
-            "refund_entitled": refund,
-            "clause_citations": citations,
-            "reasoning_summary": summary,
-            "escalation_reason": None,
-            "self_verification_passed": True,
+        state: AgentState = {
+            "handoff": handoff, "passages": [], "pending_refs": [], "followed_refs": [],
+            "queries_done": [], "modifier_search_done": False, "fields_checked": [],
+            "steps": 0, "verify_attempts": 0, "strategy": "dense", "trace": [], "stop_reason": None,
         }
+        final = self.graph.invoke(state, config={"recursion_limit": 4 * self.max_steps + 20})
+        return final["result"]
 
-    def _verify_citations_against_passages(
-        self, citations: List[Citation], passages: List[Dict[str, Any]]
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        A3 Self-Verification:
-        Ensures every citation identifier and key phrase physically resolves into the retrieved passages.
-        """
-        combined_text = " ".join([p.get("text", "") for p in passages]).lower()
+    # ================================================================== nodes
+    def _limit_hit(self, state: AgentState) -> Optional[str]:
+        if time.time() > self.deadline:
+            return "wall-clock timeout"
+        if state["steps"] >= self.max_steps:
+            return f"step limit ({self.max_steps})"
+        if self.toolbox.get_total_calls() >= self.max_tool_calls:
+            return f"tool-call limit ({self.max_tool_calls})"
+        return None
 
-        for c in citations:
-            clause_id_norm = c.clause_id.replace("CAR-", "").replace("INDIGO-", "").lower()
-            # Check if clause ID or a key snippet of the quote resolves
-            has_id = clause_id_norm in combined_text or c.clause_id.lower() in combined_text
-            # Extract distinctive 3-4 word phrase from quote
-            quote_words = [w for w in c.quote.lower().split() if len(w) > 3][:4]
-            has_phrase = any(w in combined_text for w in quote_words) if quote_words else True
+    def _plan(self, state: AgentState) -> AgentState:
+        steps = state["steps"] + 1
+        limit = self._limit_hit({**state, "steps": state["steps"]})
+        if limit:
+            action = {"tool": "finish", "args": {}, "reason": f"loop bound reached: {limit}", "by": "bound"}
+            return {"steps": steps, "next_action": action, "stop_reason": limit,
+                    "_event": {"action": action}}
 
-            if not (has_id or has_phrase):
-                return False, c.clause_id
+        policy_action = self._policy_action(state)
+        action = policy_action
+        if not self.baseline and self.llm.is_stub:
+            # In-process stub: make the call for latency/cost accounting, then follow the policy.
+            try:
+                self.llm.generate(self.system_prompt, f"plan step {steps}", step_name="agent_2_plan")
+            except Exception as e:
+                self._degrade(f"planner model unavailable ({type(e).__name__})")
+        elif not self.baseline:
+            llm_action = self._llm_action(state)
+            if llm_action is not None:
+                if llm_action["tool"] == "finish" and (state["pending_refs"] or not state["modifier_search_done"]):
+                    why = ("unread cross-references remain" if state["pending_refs"]
+                           else "no search for modifying conditions/exemptions has been run yet")
+                    action = {**policy_action, "reason": policy_action["reason"] +
+                              f" (model wanted to finish; {why})", "by": "policy-override"}
+                else:
+                    action = llm_action
+        return {"steps": steps, "next_action": action, "_event": {"action": action}}
 
-        return True, None
+    def _policy_action(self, state: AgentState) -> Dict[str, Any]:
+        """Deterministic planner: used in stub mode and as the fallback when the model's choice is unusable."""
+        h = state["handoff"]
+        dtype = str(getattr(h["disruption_type"], "value", h["disruption_type"]))
+        read_text = " ".join(p["text"] for p in state["passages"]).lower()
 
-    def _build_escalation_result(self, handoff: Dict[str, Any], reason: str, clause_id: str) -> Dict[str, Any]:
-        return {
+        if not state["queries_done"]:
+            query = f"{dtype.replace('_', ' ')} compensation entitlement. {h['free_text_claim_narrative'][:300]}"
+            return {"tool": "corpus_search", "args": {"query": query, "strategy": state["strategy"]},
+                    "reason": "retrieve the provision that appears to apply", "by": "policy"}
+
+        if self.baseline:  # v1.0 baseline: single retrieval pass, answer from what came back
+            return {"tool": "finish", "args": {}, "reason": "baseline variant answers after one retrieval", "by": "policy"}
+
+        if state["pending_refs"]:
+            ref = state["pending_refs"][0]
+            return {"tool": "lookup_clause_by_id", "args": {"clause_id": ref},
+                    "reason": f"a retrieved provision refers to {ref}; read it to see whether it modifies the answer",
+                    "by": "policy"}
+
+        cause = str(h.get("cause_attribution", "")).lower()
+        if ("disputed" in cause or "contested" in cause) and not any(
+                rules.clause_compatible("CAR-3.6", p["clause_id"]) for p in state["passages"]):
+            return {"tool": "lookup_clause_by_id", "args": {"clause_id": "CAR-3.6"},
+                    "reason": "cause is disputed: read the dispute-resolution provisions", "by": "policy"}
+
+        if not state["modifier_search_done"]:
+            found = [t for t in _MODIFIER_TERMS if t in read_text][:4]
+            query = (f"airline shall not be liable conditions exemptions {dtype.replace('_', ' ')} "
+                     + " ".join(found))
+            return {"tool": "corpus_search", "args": {"query": query, "strategy": "hybrid"},
+                    "reason": "search again with a query derived from what was read, for conditions and "
+                              "exemptions that could remove or modify the entitlement", "by": "policy"}
+
+        for phrase, field in _FIELD_TRIGGERS:
+            if phrase in read_text and field not in state["fields_checked"] and len(state["fields_checked"]) < 2:
+                return {"tool": "get_claim_field", "args": {"field_name": field},
+                        "reason": f"a retrieved provision depends on '{phrase}'; check the claim's {field}",
+                        "by": "policy"}
+
+        return {"tool": "finish", "args": {}, "reason": "no unread references or unchecked conditions remain",
+                "by": "policy"}
+
+    def _degrade(self, reason: str):
+        if reason not in self.degraded_reasons:
+            self.degraded_reasons.append(reason)
+
+    def _llm_action(self, state: AgentState) -> Optional[Dict[str, Any]]:
+        """Ask the model to choose the next tool call (A1). Returns None if the reply is unusable."""
+        h = state["handoff"]
+        read = [f"- {p['clause_id']}: {p['text'][:160].replace(chr(10), ' ')}" for p in state["passages"]]
+        prompt = (
+            "CLAIM FACTS:\n" + json.dumps({k: (getattr(v, 'value', v)) for k, v in h.items()
+                                           if k not in ("llm_classification_summary",)}, default=str)[:1500]
+            + "\n\nCLAUSES READ SO FAR:\n" + ("\n".join(read) or "(none)")
+            + f"\n\nUNREAD CROSS-REFERENCES FOUND IN THOSE CLAUSES: {state['pending_refs'] or 'none'}"
+            + f"\nQUERIES ALREADY RUN: {state['queries_done'] or 'none'}"
+            + f"\nTOOL CALLS LEFT: {self.max_tool_calls - self.toolbox.get_total_calls()}"
+            + "\n\nChoose the NEXT action. Tools:\n"
+              "- corpus_search(query, strategy in [dense, keyword, hybrid]): search the CAR and airline charter\n"
+              "- lookup_clause_by_id(clause_id): read one clause and its sub-clauses, e.g. CAR-3.7\n"
+              "- get_claim_field(field_name): read one field of the claim\n"
+              "- finish(): stop when every provision that could create, remove or modify the entitlement "
+              "(conditions, exemptions, referenced facilities clauses) has been read\n"
+              'Reply ONLY with JSON: {"tool": "...", "args": {...}, "reason": "..."}'
+        )
+        try:
+            data = self.llm.generate_json(self.system_prompt, prompt, step_name="agent_2_plan")
+        except Exception as e:
+            logger.warning(f"planner LLM call failed, using policy: {type(e).__name__}: {e}")
+            self._degrade(f"planner model unavailable ({type(e).__name__})")
+            return None
+        if not data or data.get("tool") not in TOOLS:
+            return None
+        args = data.get("args") or {}
+        tool = data["tool"]
+        if tool == "corpus_search" and not args.get("query"):
+            return None
+        if tool == "lookup_clause_by_id" and not args.get("clause_id"):
+            return None
+        if tool == "get_claim_field" and not args.get("field_name"):
+            return None
+        if tool == "corpus_search" and args.get("query") in state["queries_done"]:
+            return None
+        return {"tool": tool, "args": args, "reason": str(data.get("reason", ""))[:300], "by": "llm"}
+
+    def _run_tool(self, state: AgentState) -> AgentState:
+        action = state["next_action"]
+        tool, args = action["tool"], action.get("args", {})
+        passages = list(state["passages"])
+        pending = list(state["pending_refs"])
+        followed = list(state["followed_refs"])
+        queries = list(state["queries_done"])
+        fields = list(state["fields_checked"])
+        update: AgentState = {}
+        new: List[Dict[str, Any]] = []
+        observation: Any = None
+
+        with span(f"tool.{tool}", {"correlation_id": self.correlation_id, **{k: str(v) for k, v in args.items()}}):
+            if tool == "corpus_search":
+                strategy = args.get("strategy", "dense")
+                if strategy not in ("dense", "keyword", "hybrid"):
+                    strategy = "dense"
+                new = self.toolbox.corpus_search(query=args["query"], top_k=int(args.get("top_k", 4)), strategy=strategy)
+                queries.append(args["query"])
+                if len(queries) > 1:  # any search after the first is a follow-up search for modifiers
+                    update["modifier_search_done"] = True
+                observation = [p["clause_id"] for p in new]
+            elif tool == "lookup_clause_by_id":
+                cid = self.toolbox.vstore.normalise_clause_id(str(args["clause_id"]))
+                hit = self.toolbox.lookup_clause_by_id(cid)
+                new = [hit] if hit else []
+                followed.append(cid)
+                pending = [r for r in pending if r != cid]
+                observation = hit["clause_id"] if hit else "not found in corpus"
+            elif tool == "get_claim_field":
+                field = str(args["field_name"])
+                observation = self.toolbox.get_claim_field(field)
+                fields.append(field)
+
+        # merge evidence (a clause looked up whole replaces a shorter copy of itself)
+        by_clause = {p["clause_id"]: i for i, p in enumerate(passages)}
+        for p in new:
+            if p["clause_id"] in by_clause:
+                i = by_clause[p["clause_id"]]
+                if len(p["text"]) > len(passages[i]["text"]):
+                    passages[i] = p
+            else:
+                by_clause[p["clause_id"]] = len(passages)
+                passages.append(p)
+
+        # follow references found in newly read text (only in the full agent variant)
+        if not self.baseline:
+            for p in new:
+                for ref in self._extract_refs(p):
+                    already = any(rules.clause_compatible(ref, q["clause_id"]) for q in passages)
+                    if not already and ref not in pending and ref not in followed and len(pending) < MAX_PENDING_REFS:
+                        pending.append(ref)
+
+        update.update(passages=passages, pending_refs=pending, followed_refs=followed,
+                      queries_done=queries, fields_checked=fields,
+                      _event={"tool": tool, "args": args, "observation": observation,
+                              "new_pending_refs": [r for r in pending if r not in state["pending_refs"]]})
+        return update
+
+    @staticmethod
+    def _extract_refs(passage: Dict[str, Any]) -> List[str]:
+        own = passage["clause_id"].upper()
+        refs = []
+        for m in _REF_RE.finditer(passage["text"]):
+            for num in _NUM_RE.findall(m.group(1)):
+                parts = num.split(".")
+                cid = "CAR-" + ".".join(parts[:3])
+                if own.startswith("CAR") and rules.clause_compatible(cid, own):
+                    continue
+                if cid not in refs:
+                    refs.append(cid)
+        return refs
+
+    def _decide(self, state: AgentState) -> AgentState:
+        h = state["handoff"]
+        evidence = rules.Evidence(state["passages"])
+        decision = rules.decide(h, evidence, apply_modifiers=not self.baseline)
+
+        if self.demo_fault == "unsupported_citation":
+            # Demo item 6: inject a citation the agent never retrieved, to show verification catching it.
+            decision["citations"].append({"clause_id": "CAR-3.9.1", "anchor": "additional goodwill compensation of inr 50,000",
+                                          "relevance": "Injected unsupported citation (demonstration fault).",
+                                          "document_title": rules.CAR_TITLE})
+
+        resolved = []
+        for c in decision["citations"]:
+            hit = evidence.find(c["clause_id"], c["anchor"])
+            resolved.append({**c, "quote": hit[1] if hit else None,
+                             "resolved_from": hit[0]["clause_id"] if hit else None})
+        decision["citations"] = resolved
+
+        explanation = None
+        if decision["routing_decision"] != RoutingDecision.ESCALATE and not self.baseline:
+            if self.llm.is_stub:
+                try:
+                    self.llm.generate(self.system_prompt, "explain", step_name="agent_2_explain")
+                except Exception as e:
+                    self._degrade(f"explanation model unavailable ({type(e).__name__})")
+            else:
+                explanation = self._llm_explanation(h, decision)
+        if explanation:
+            decision["llm_explanation"] = explanation
+        return {"decision": decision,
+                "_event": {"routing": decision["routing_decision"].value,
+                           "compensation_inr": decision["monetary_compensation_inr"],
+                           "citations": [c["clause_id"] for c in resolved]}}
+
+    def _llm_explanation(self, h: Dict[str, Any], decision: Dict[str, Any]) -> Optional[str]:
+        quotes = "\n".join(f"[{c['clause_id']}] {c['quote']}" for c in decision["citations"] if c.get("quote"))
+        prompt = (f"Passenger narrative: {h['free_text_claim_narrative']}\n"
+                  f"Determination: {decision['routing_decision'].value}, compensation INR "
+                  f"{decision['monetary_compensation_inr']:,.0f}, facilities: {decision['facilities_entitled']}\n"
+                  f"Retrieved provisions:\n{quotes}\n\n"
+                  "In at most 3 sentences, explain this determination to a customer relations officer. "
+                  "Use ONLY the provisions above and cite them by their bracketed ids. Do not change the determination.")
+        try:
+            text = self.llm.generate(self.system_prompt, prompt, step_name="agent_2_explain").strip()
+        except Exception as e:
+            logger.warning(f"explanation LLM call failed (degraded to template summary): {type(e).__name__}")
+            self._degrade(f"explanation model unavailable ({type(e).__name__})")
+            return None
+        # A3 for free text: every clause number the model mentions must be one it was given.
+        allowed = {c["clause_id"].split("-", 1)[-1] for c in decision["citations"] if c.get("quote")}
+        mentioned = set(_NUM_RE.findall(text))
+        if any(not any(m == a or m.startswith(a + ".") or a.startswith(m + ".") for a in allowed) for m in mentioned):
+            logger.warning("LLM explanation cited an unretrieved clause; discarded by verification")
+            return None
+        return text[:1200]
+
+    def _verify(self, state: AgentState) -> AgentState:
+        d = state["decision"]
+        unresolved = [c["clause_id"] for c in d["citations"] if not c.get("quote")]
+        problems = [f"citation {c} does not resolve to retrieved text" for c in unresolved]
+        if d["routing_decision"] == RoutingDecision.PAY_AS_COMPUTED and d["monetary_compensation_inr"] > 0 \
+                and not any(c.get("quote") for c in d["citations"]):
+            problems.append("a payable amount is not supported by any retrieved provision")
+        if state.get("stop_reason"):
+            problems.append(f"run did not complete: {state['stop_reason']}")
+
+        if not problems:
+            VERIFICATION_COUNTER.labels(outcome="passed").inc()
+            return {"verification": {"route": "pass", "passed": True, "attempts": state["verify_attempts"] + 1},
+                    "_event": {"verification": "passed"}}
+
+        attempts = state["verify_attempts"] + 1
+        can_retry = (not self.baseline and attempts <= MAX_VERIFY_RETRIES and not state.get("stop_reason")
+                     and unresolved and not self._limit_hit(state))
+        if can_retry:
+            VERIFICATION_COUNTER.labels(outcome="failed_retried").inc()
+            RETRY_COUNTER.labels(agent_name="reasoner", kind="verification").inc()
+            pending = list(state["pending_refs"])
+            followed = list(state["followed_refs"])
+            for cid in unresolved:
+                if cid not in pending and cid not in followed:
+                    pending.append(cid)
+            return {"verification": {"route": "retry", "passed": False, "problems": problems, "attempts": attempts},
+                    "verify_attempts": attempts, "pending_refs": pending, "strategy": "hybrid",
+                    "modifier_search_done": False,
+                    "_event": {"verification": "failed", "problems": problems,
+                               "retry_strategy": "direct clause lookup + hybrid (keyword+dense) search"}}
+
+        VERIFICATION_COUNTER.labels(outcome="failed_escalated").inc()
+        return {"verification": {"route": "escalate", "passed": False, "problems": problems, "attempts": attempts},
+                "verify_attempts": attempts, "_event": {"verification": "failed", "problems": problems,
+                                                        "action": "escalate"}}
+
+    def _escalate(self, state: AgentState) -> AgentState:
+        problems = state["verification"].get("problems", [])
+        reason = ("Self-verification failed (A3): " + "; ".join(problems)
+                  + ". An unverified answer is not returned; escalated to a customer relations officer.")
+        result = {
             "routing_decision": RoutingDecision.ESCALATE,
             "monetary_compensation_inr": 0.0,
             "facilities_entitled": ["Human Customer Relations Officer Review"],
             "refund_entitled": False,
-            "clause_citations": [
-                Citation(
-                    clause_id=clause_id,
-                    document_title="DGCA CAR Section 3 Series M Part IV (Rev 4)",
-                    quote="Airlines shall maintain a grievance redressal mechanism and escalate contested claims to customer relations analysts.",
-                    relevance="Mandatory escalation under dispute or unanswerable scenario (F7).",
-                )
-            ],
-            "reasoning_summary": f"Claim escalated to human review: {reason}",
+            "clause_citations": [],
+            "reasoning_summary": reason,
             "escalation_reason": reason,
+            "self_verification_passed": False,
+        }
+        return {"result": self._with_reconstruction(result, state), "_event": {"escalated": True}}
+
+    def _finalize(self, state: AgentState) -> AgentState:
+        d = state["decision"]
+        citations = [Citation(clause_id=c["clause_id"], document_title=c["document_title"],
+                              quote=c["quote"], relevance=c["relevance"]) for c in d["citations"]]
+        summary = d["reasoning_summary"]
+        if d.get("llm_explanation"):
+            summary += "\n\nAgent explanation: " + d["llm_explanation"]
+        if self.degraded_reasons or state["handoff"].get("llm_degraded"):
+            summary += ("\n\n[Degraded mode] The language model was unavailable for part of this run, so the "
+                        "deterministic fallback planner was used. The answer still passed citation verification.")
+        result = {
+            "routing_decision": d["routing_decision"],
+            "monetary_compensation_inr": d["monetary_compensation_inr"],
+            "facilities_entitled": d["facilities_entitled"],
+            "refund_entitled": d["refund_entitled"],
+            "clause_citations": citations,
+            "reasoning_summary": summary,
+            "escalation_reason": d.get("escalation_reason"),
             "self_verification_passed": True,
         }
+        return {"result": self._with_reconstruction(result, state)}
+
+    def _with_reconstruction(self, result: Dict[str, Any], state: AgentState) -> Dict[str, Any]:
+        result["agent_trace"] = state.get("trace", [])
+        result["retrieved_passages"] = [
+            {"clause_id": p["clause_id"], "score": p.get("score"), "text": p["text"]} for p in state["passages"]]
+        result["verification"] = state.get("verification", {})
+        result["graph_steps"] = state["steps"]
+        result["degraded_mode"] = bool(self.degraded_reasons or state["handoff"].get("llm_degraded"))
+        result["degraded_reasons"] = self.degraded_reasons + (
+            ["classifier model unavailable"] if state["handoff"].get("llm_degraded") else [])
+        return result

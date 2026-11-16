@@ -18,19 +18,28 @@ class ClaimToolBox:
         self.vstore = vector_store
         self.tool_call_history: List[Dict[str, Any]] = []
 
-    def corpus_search(self, query: str, top_k: int = 4, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    def corpus_search(self, query: str, top_k: int = 4, category: Optional[str] = None,
+                      strategy: str = "dense") -> List[Dict[str, Any]]:
         """
-        Tool 1: Semantic search across the regulatory and charter corpus (A1).
-        Agent chooses whether, when, and what query to search with.
+        Tool 1: Search across the regulatory and charter corpus (A1).
+        The agent chooses whether, when and with what query to search.
+        strategy: "dense" (FAISS semantic), "keyword" (lexical) or "hybrid" (both, merged).
         """
         start = time.time()
-        results = self.vstore.search(query=query, top_k=top_k, category=category)
+        if strategy == "keyword":
+            results = self.vstore.keyword_search(query=query, top_k=top_k)
+        else:
+            results = self.vstore.search(query=query, top_k=top_k, category=category)
+            if strategy == "hybrid":
+                seen = {r["chunk_id"] for r in results}
+                results += [r for r in self.vstore.keyword_search(query=query, top_k=top_k) if r["chunk_id"] not in seen]
         duration = time.time() - start
 
         self.tool_call_history.append({
             "tool": "corpus_search",
-            "parameters": {"query": query, "top_k": top_k, "category": category},
+            "parameters": {"query": query, "top_k": top_k, "category": category, "strategy": strategy},
             "results_count": len(results),
+            "passages": [{"clause_id": r["clause_id"], "score": r.get("score")} for r in results],
             "duration_seconds": round(duration, 4),
         })
         return results
@@ -48,6 +57,7 @@ class ClaimToolBox:
             "tool": "lookup_clause_by_id",
             "parameters": {"clause_id": clause_id},
             "found": result is not None,
+            "passages": [{"clause_id": result["clause_id"], "score": 1.0}] if result else [],
             "duration_seconds": round(duration, 4),
         })
         return result

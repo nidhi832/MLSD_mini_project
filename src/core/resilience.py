@@ -25,7 +25,14 @@ class CircuitBreakerOpenException(Exception):
 
 
 class CircuitBreaker:
-    """Circuit Breaker implementing fail-fast and graceful degradation (A5)."""
+    """
+    Circuit Breaker implementing fail-fast and graceful degradation (A5).
+
+    State is shared through Redis (key circuit:<name>) so that every container
+    that calls the provider sees the same breaker: tripping it through the API
+    (demo item 8) also stops the agent workers, and failures seen by one worker
+    count for all of them. Without Redis the state is per process.
+    """
 
     def __init__(
         self,
@@ -43,7 +50,44 @@ class CircuitBreaker:
         self.last_failure_time = 0.0
         self.total_trips = 0
 
+    # -- shared state -------------------------------------------------------
+    def _key(self) -> str:
+        return f"circuit:{self.name}"
+
+    def _load(self):
+        try:
+            from src.core.shared_state import get_redis
+            client = get_redis()
+            if client is None:
+                return
+            data = client.hgetall(self._key())
+            if data:
+                self.state = CircuitState(data.get("state", "CLOSED"))
+                self.failure_count = int(data.get("failure_count", 0))
+                self.last_state_change = float(data.get("last_state_change", time.time()))
+                self.last_failure_time = float(data.get("last_failure_time", 0.0))
+                self.total_trips = int(data.get("total_trips", 0))
+        except Exception:
+            pass
+
+    def _save(self):
+        try:
+            from src.core.shared_state import get_redis
+            client = get_redis()
+            if client is None:
+                return
+            client.hset(self._key(), mapping={
+                "state": self.state.value,
+                "failure_count": self.failure_count,
+                "last_state_change": self.last_state_change,
+                "last_failure_time": self.last_failure_time,
+                "total_trips": self.total_trips,
+            })
+        except Exception:
+            pass
+
     def can_execute(self) -> bool:
+        self._load()
         if self.state == CircuitState.CLOSED:
             return True
 
@@ -52,6 +96,7 @@ class CircuitBreaker:
             if now - self.last_state_change >= self.recovery_timeout_seconds:
                 self.state = CircuitState.HALF_OPEN
                 self.last_state_change = now
+                self._save()
                 return True
             return False
 
@@ -61,14 +106,17 @@ class CircuitBreaker:
         return False
 
     def record_success(self):
+        self._load()
         if self.state == CircuitState.HALF_OPEN:
             self.state = CircuitState.CLOSED
             self.failure_count = 0
             self.last_state_change = time.time()
         elif self.state == CircuitState.CLOSED:
             self.failure_count = 0
+        self._save()
 
     def record_failure(self):
+        self._load()
         self.failure_count += 1
         self.last_failure_time = time.time()
 
@@ -80,19 +128,24 @@ class CircuitBreaker:
             self.state = CircuitState.OPEN
             self.last_state_change = time.time()
             self.total_trips += 1
+        self._save()
 
     def trip_manually(self):
         """Allows testing and demonstration of circuit breaker trip (Demo Item 8)."""
+        self._load()
         self.state = CircuitState.OPEN
         self.last_state_change = time.time()
         self.total_trips += 1
+        self._save()
 
     def reset_manually(self):
         self.state = CircuitState.CLOSED
         self.failure_count = 0
         self.last_state_change = time.time()
+        self._save()
 
     def get_status(self) -> Dict[str, Any]:
+        self._load()
         return {
             "name": self.name,
             "state": self.state.value,
@@ -162,6 +215,7 @@ def execute_with_retry(
     backoff_factor: float = 2.0,
     circuit_breaker: Optional[CircuitBreaker] = None,
     timeout_seconds: float = 15.0,
+    on_retry: Optional[Callable[[int], None]] = None,
     *args,
     **kwargs,
 ) -> Any:
@@ -175,6 +229,12 @@ def execute_with_retry(
     last_err = None
 
     for attempt in range(max_retries):
+        if attempt > 0 and on_retry:
+            on_retry(attempt)
+        if circuit_breaker and attempt > 0 and not circuit_breaker.can_execute():
+            raise CircuitBreakerOpenException(
+                f"Circuit breaker '{circuit_breaker.name}' opened during retries; entering graceful degradation."
+            )
         try:
             start_t = time.time()
             result = func(*args, **kwargs)

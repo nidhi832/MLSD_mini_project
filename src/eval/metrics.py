@@ -1,77 +1,82 @@
 """
-Evaluation Metrics Calculator (L3).
-Defines and computes the four core RAG/AgentOps metrics:
-1. Groundedness: Ratio of claims in output that resolve directly to retrieved passages.
-2. Context Relevance: Degree to which retrieved passages match the regulatory requirements of the claim.
-3. Faithfulness: Consistency of the triage determination with regulatory provisions and conditions.
-4. Hallucination Rate: 1.0 - Faithfulness.
+Evaluation metrics (L3). Each metric is computed per scenario from the run's own
+reconstruction (the passages the agent actually retrieved), then averaged.
+
+1. Groundedness       = cited quotes found verbatim in the retrieved passages / citations.
+                         A determination with no citations scores 1.0 only if it is an escalation.
+2. Context relevance  = retrieved passages from the regulatory section that governs the
+                         disruption (or the facilities / escalation / charter sections) / passages retrieved.
+3. Faithfulness       = 0.7 * (routing matches the expected, passage-supported outcome)
+                       + 0.3 * (compensation within INR 100 of expected).
+4. Hallucination rate = share of scenarios where the system gave a confident (non-escalated)
+                         answer that is wrong or cites text it did not retrieve.
+                         Escalating is not a hallucination: it is the safe answer.
+Also reported: supporting-passage recall = expected supporting clause was retrieved.
 """
 
-from typing import Dict, Any, List
+import re
+from typing import Any, Dict, List
+
+SECTION_FOR = {
+    "cancellation": ("CAR-3.3",),
+    "delay": ("CAR-3.4",),
+    "denied_boarding": ("CAR-3.2",),
+    "downgrading": ("CAR-3.5",),
+}
+ALWAYS_RELEVANT = ("CAR-3.6", "CAR-3.7", "CAR-3.8", "CAR-2", "INDIGO-")
+
+
+def _norm(t: str) -> str:
+    return re.sub(r"\s+", " ", (t or "").lower()).strip()
+
+
+def _same_clause(a: str, b: str) -> bool:
+    a, b = a.upper(), b.upper()
+    return a == b or a.startswith(b + ".") or b.startswith(a + ".")
 
 
 class LLMOpsMetrics:
     @staticmethod
-    def compute_groundedness(result: Dict[str, Any], retrieved_passages: List[Dict[str, Any]]) -> float:
-        """
-        Groundedness: Computes the proportion of cited clauses and quotes that physically
-        appear in the passages supplied to the agent.
-        """
+    def compute_groundedness(result: Dict[str, Any], passages: List[Dict[str, Any]]) -> float:
         citations = result.get("clause_citations", [])
         if not citations:
-            return 1.0 if result.get("routing_decision") in ("decline", "escalate") else 0.5
-
-        combined_text = " ".join([p.get("text", "") for p in retrieved_passages]).lower()
-        grounded_count = 0
-
-        for cit in citations:
-            clause_id = cit.get("clause_id", "").lower().replace("car-", "")
-            quote_snip = cit.get("quote", "").lower()[:25]
-            if clause_id in combined_text or quote_snip in combined_text:
-                grounded_count += 1
-
-        return round(grounded_count / len(citations), 4)
+            return 1.0 if str(result.get("routing_decision")) in ("escalate", "RoutingDecision.ESCALATE") else 0.0
+        evidence = _norm(" ".join(p.get("text", "") for p in passages))
+        grounded = sum(1 for c in citations if c.get("quote") and _norm(c["quote"]) in evidence)
+        return round(grounded / len(citations), 4)
 
     @staticmethod
-    def compute_context_relevance(claim: Dict[str, Any], retrieved_passages: List[Dict[str, Any]]) -> float:
-        """
-        Context Relevance: Measures whether retrieved passages address the specific disruption type
-        and operational conditions present in the claim.
-        """
-        if not retrieved_passages:
+    def compute_context_relevance(claim: Dict[str, Any], passages: List[Dict[str, Any]]) -> float:
+        if not passages:
             return 0.0
+        prefixes = SECTION_FOR.get(claim.get("disruption_type", ""), ()) + ALWAYS_RELEVANT
+        relevant = sum(1 for p in passages if p.get("clause_id", "").upper().startswith(prefixes))
+        return round(relevant / len(passages), 4)
 
-        dtype = claim.get("disruption_type", "").lower()
-        relevant_count = 0
-
-        for p in retrieved_passages:
-            category = p.get("metadata", {}).get("category", "").lower()
-            text = p.get("text", "").lower()
-            if dtype in category or dtype in text or "facilities" in category or "3.3" in p.get("clause_id", ""):
-                relevant_count += 1
-
-        return round(relevant_count / len(retrieved_passages), 4)
+    @staticmethod
+    def supporting_passage_retrieved(expected: Dict[str, Any], passages: List[Dict[str, Any]]) -> float:
+        target = expected.get("supporting_clause")
+        if not target:
+            return 1.0
+        return 1.0 if any(_same_clause(target, p.get("clause_id", "")) for p in passages) else 0.0
 
     @staticmethod
     def compute_faithfulness(result: Dict[str, Any], expected: Dict[str, Any]) -> float:
-        """
-        Faithfulness: Verifies that the routing decision and monetary compensation strictly
-        align with regulatory conditions (no fabricated payouts).
-        """
-        actual_route = result.get("routing_decision")
-        expected_route = expected.get("expected_routing")
-
-        route_match = 1.0 if str(actual_route) == str(expected_route) else 0.0
-
-        # Check compensation adherence
-        actual_comp = result.get("monetary_compensation_inr", 0.0)
-        expected_comp = expected.get("expected_compensation_inr", 0.0)
-        comp_diff = abs(actual_comp - expected_comp)
-        comp_match = 1.0 if comp_diff <= 100.0 else max(0.0, 1.0 - (comp_diff / max(expected_comp, 5000.0)))
-
-        return round((route_match * 0.7) + (comp_match * 0.3), 4)
+        route_match = 1.0 if _route(result) == expected.get("expected_routing") else 0.0
+        diff = abs(result.get("monetary_compensation_inr", 0.0) - expected.get("expected_compensation_inr", 0.0))
+        comp_match = 1.0 if diff <= 100.0 else max(0.0, 1.0 - diff / max(expected.get("expected_compensation_inr", 0.0), 5000.0))
+        return round(route_match * 0.7 + comp_match * 0.3, 4)
 
     @staticmethod
-    def compute_hallucination_rate(faithfulness: float) -> float:
-        """Hallucination Rate = 1.0 - Faithfulness."""
-        return round(max(0.0, 1.0 - faithfulness), 4)
+    def is_hallucination(result: Dict[str, Any], expected: Dict[str, Any], groundedness: float) -> bool:
+        route = _route(result)
+        if route == "escalate":
+            return False
+        wrong = route != expected.get("expected_routing") or abs(
+            result.get("monetary_compensation_inr", 0.0) - expected.get("expected_compensation_inr", 0.0)) > 100
+        return wrong or groundedness < 1.0
+
+
+def _route(result: Dict[str, Any]) -> str:
+    r = result.get("routing_decision")
+    return getattr(r, "value", str(r))

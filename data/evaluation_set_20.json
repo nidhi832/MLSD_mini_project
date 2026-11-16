@@ -24,7 +24,9 @@
     },
     "expected_routing": "request-further-evidence",
     "expected_compensation_inr": 0.0,
-    "expected_facilities": ["Free meals and refreshments"],
+    "expected_facilities": [
+      "Free meals and refreshments"
+    ],
     "supporting_clause": "CAR-3.3.2"
   },
   {
@@ -507,7 +509,7 @@
   {
     "id": "SCENARIO-20",
     "title": "Cancellation with Unacceptable Alternate Flight (>2h difference)",
-    "description": "Notice 3 days before, alternate departed 6h later, rejected by passenger.",
+    "description": "Notice 3 days before, alternate departed 6h later, rejected by passenger. Corrected: notice was 72 h (between 24 h and 2 weeks), so CAR 3.3.1(b) applies - alternate flight or full refund, no compensation. The original expectation (pay INR 6,000 under 3.3.2) ignored the notice condition, which is exactly the Section 3 difficulty.",
     "claim_payload": {
       "pnr": "6E919T",
       "passenger_name": "Tanya Saxena",
@@ -527,8 +529,9 @@
       "cause_attribution": "airline_operational",
       "free_text_claim_narrative": "Informed 3 days prior of cancellation. The alternate flight offered was 6 hours later, so I did not accept."
     },
-    "expected_routing": "pay-as-computed",
-    "expected_compensation_inr": 6000.0,
-    "supporting_clause": "CAR-3.3.2"
+    "expected_routing": "decline",
+    "expected_compensation_inr": 0.0,
+    "supporting_clause": "CAR-3.3.1",
+    "expected_refund": true
   }
 ]
